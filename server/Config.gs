@@ -58,7 +58,8 @@ const STATUS = { ACTIVE: '활성', PAUSED: '휴원', ENDED: '종료' };
  * 보안 수준을 낮추는 실수를 막기 위해 시트가 아니라 코드에 둡니다.
  */
 const SECURITY = {
-  HASH_ITERATIONS: 10000,          // 비밀번호 해시 반복 횟수. '해시 속도 측정' 메뉴로 확인 후 조정
+  HASH_ITERATIONS: 800,            // 비밀번호 해시 반복 횟수. '해시 속도 측정' 메뉴로 확인 후 조정
+                                   // (2026-11-19 테스트 실측: 1,000회 ≈ 1.1초 → 로그인 1초 이내가 되도록 800회)
   MAX_LOGIN_FAIL: 5,               // 연속 실패 허용 횟수
   LOCK_MINUTES: 10,                // 잠금 시간(분)
   SESSION_DAYS: 90,                // 로그인 유지 기간(일)
