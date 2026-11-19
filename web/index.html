@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>에이플랫 연습실</title>
+  <meta name="description" content="에이플랫 뮤직 스튜디오 수강생 앱">
+  <meta name="theme-color" content="#035A17">
+
+  <!-- PWA(홈 화면에 추가) 설정 -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="에이플랫">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- 폰트: 배달의민족 도현체 (현행 연습실 현황 페이지와 동일) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="view" class="view"></main>
+
+  <!-- 하단 메뉴 (로그인 후 표시) -->
+  <nav id="nav" class="nav" hidden>
+    <a href="#timetable" data-tab="timetable"><span class="ico">🎹</span>시간표</a>
+    <a href="#book" data-tab="book"><span class="ico">📝</span>예약하기</a>
+    <a href="#my" data-tab="my"><span class="ico">📅</span>내 예약</a>
+    <a href="#admin" data-tab="admin" id="navAdmin" hidden><span class="ico">🔑</span>관리</a>
+    <a href="#more" data-tab="more"><span class="ico">☰</span>더보기</a>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="modal" class="modal" hidden></div>
+
+  <script src="config.js"></script>
+  <script>
+    // 개발용: 주소 끝에 ?mock=1 을 붙이면 가짜 서버로 화면만 확인할 수 있습니다.
+    if (/[?&]mock=1/.test(location.search)) document.write('<script src="dev/mock-api.js"><\/script>');
+  </script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

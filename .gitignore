@@ -1,0 +1,7 @@
+# clasp 로그인 정보(개인 인증 토큰) — 절대 올리지 않음
+.clasprc.json
+# 현재 사용 중인 clasp 대상 (test/prod 파일을 복사해서 씀)
+.clasp.json
+node_modules/
+.DS_Store
+Thumbs.db

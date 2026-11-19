@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>예약 로직 테스트</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #fff; color: #222; }
+    .pass { color: #0a7a2a; } .fail { color: #c0392b; font-weight: bold; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>예약 로직 테스트 (server/Logic.gs)</h1>
+  <p>이 파일을 브라우저로 열면 서버의 예약 계산 로직을 구글 없이 바로 검사합니다.</p>
+  <p id="summary"></p>
+  <ul id="out"></ul>
+
+  <script src="../server/Logic.gs"></script>
+  <script>
+    const results = [];
+    function eq(name, actual, expected) {
+      const a = JSON.stringify(actual), e = JSON.stringify(expected);
+      results.push({ name: name, ok: a === e, detail: a === e ? '' : ' → 실제 ' + a + ' / 기대 ' + e });
+    }
+    const T = function (h, m) { return new Date(2026, 10, 20, h, m || 0).getTime(); };   // 2026-11-20 h:m
+    const ST = { minSegmentMin: 30, splitStepMin: 15, splitMinDuration: 60 };
+    const ROOMS = [
+      { id: 'R1', name: 'Eb', priority: 1, instruments: ['피아노', '보컬', '기타'] },
+      { id: 'R2', name: 'Bb', priority: 2, instruments: ['피아노', '드럼'] },
+      { id: 'R3', name: 'F', priority: 3, instruments: ['보컬', '기타', '베이스기타'] },
+      { id: 'R4', name: 'Db', priority: 4, instruments: ['피아노'] }
+    ];
+    const ev = function (roomId, h1, m1, h2, m2, title) { return { roomId: roomId, start: T(h1, m1), end: T(h2, m2), title: title || '' }; };
+    const alloc = function (events, instrument, s, e) {
+      const r = allocateRooms_({ events: events, rooms: ROOMS, instrument: instrument, start: s, end: e, settings: ST });
+      return r.ok ? r.segments.map(function (x) { return x.room.name + ' ' + new Date(x.start).toTimeString().slice(0, 5) + '-' + new Date(x.end).toTimeString().slice(0, 5) + (x.part ? ' ' + x.part : ''); }) : r.reason;
+    };
+
+    // --- 시각 변환 ---
+    eq('parseHHMM 08:30', parseHHMM_('08:30'), 510);
+    eq('parseHHMM 24:00', parseHHMM_('24:00'), 1440);
+    eq('parseHHMM 24:30 오류', isNaN(parseHHMM_('24:30')), true);
+    eq('minToHHMM 1440', minToHHMM_(1440), '24:00');
+    eq('splitList 세미콜론', splitList_(' 피아노; 보컬 ;'), ['피아노', '보컬']);
+
+    // --- 제목 해석 ---
+    eq('제목: 연습', parseEventTitle_('(연습)Bb_조항빈_피아노_PAM004'),
+      { type: '연습', roomName: 'Bb', studentName: '조항빈', instrument: '피아노', studentNo: 'PAM004', part: '' });
+    eq('제목: 분할 [2/2]', parseEventTitle_('(연습)Bb_조항빈_피아노_PAM004 [2/2]').part, '2/2');
+    eq('제목: 분할 번호 정리', parseEventTitle_('(연습)Bb_조항빈_피아노_pam004 [1/2]').studentNo, 'PAM004');
+    eq('제목: 레슨', parseEventTitle_('(레슨)Eb_김_보컬_PAM010').type, '레슨');
+    eq('제목: 규칙 밖', parseEventTitle_('강사 개인연습'), null);
+    eq('제목: 항목 부족', parseEventTitle_('(연습)Bb_피아노'), null);
+    eq('제목 만들기', buildPracticeTitle_('Eb', '김', '피아노', 'TST001', '1/2'), '(연습)Eb_김_피아노_TST001 [1/2]');
+
+    // --- 1일 한도 집계: 정확 일치 + 연습만 ---
+    const dayEvents = [
+      { start: T(10), end: T(11), title: '(연습)Db_김_피아노_TST001' },
+      { start: T(10), end: T(12), title: '(연습)Eb_이_기타_TST0011' },          // 번호가 겹치지만 다른 사람
+      { start: T(14), end: T(15), title: '(레슨)Bb_김_피아노_TST001' },          // 레슨은 제외
+      { start: T(18), end: T(18, 30), title: '(연습)Eb_김_피아노_TST001 [1/2]' },
+      { start: T(18, 30), end: T(19), title: '(연습)Bb_김_피아노_TST001 [2/2]' },
+      { start: T(20), end: T(21), title: 'TST001 개인 메모' }                     // 규칙 밖
+    ];
+    eq('1일 합계 TST001 = 60+30+30', sumDailyPracticeMinutes_(dayEvents, 'TST001'), 120);
+    eq('1일 합계 TST0011 = 120', sumDailyPracticeMinutes_(dayEvents, 'tst0011'), 120);
+    eq('1일 합계 없는 번호', sumDailyPracticeMinutes_(dayEvents, 'TST00'), 0);
+
+    // --- 룸 배정 ---
+    eq('빈 날: 우선순위 1 룸', alloc([], '피아노', T(10), T(11)), ['Eb 10:00-11:00']);
+    eq('Eb 사용 중 → Bb', alloc([ev('R1', 10, 0, 11, 0)], '피아노', T(10), T(11)), ['Bb 10:00-11:00']);
+    eq('악기 정확 일치: 기타는 베이스기타 룸 아님', alloc([ev('R1', 10, 0, 11, 0)], '기타', T(10), T(11)), ['F 10:00-11:00']);
+    eq('딱 붙은 일정은 겹침 아님', alloc([ev('R1', 9, 0, 10, 0), ev('R1', 11, 0, 12, 0)], '피아노', T(10), T(11)), ['Eb 10:00-11:00']);
+    // 분할: Eb 19-20 / Bb 18-19 / Db 18-20 사용 중, 피아노 18-20 요청
+    const splitEv = [ev('R1', 19, 0, 20, 0), ev('R2', 18, 0, 19, 0), ev('R4', 18, 0, 20, 0)];
+    eq('2개 룸 분할 (60분 지점)', alloc(splitEv, '피아노', T(18), T(20)), ['Eb 18:00-19:00 1/2', 'Bb 19:00-20:00 2/2']);
+    // 분할: 15분 단위 지점
+    const splitEv2 = [ev('R1', 18, 45, 20, 0), ev('R2', 18, 0, 18, 45), ev('R4', 18, 0, 20, 0)];
+    eq('2개 룸 분할 (45분 지점)', alloc(splitEv2, '피아노', T(18), T(19, 30)), ['Eb 18:00-18:45 1/2', 'Bb 18:45-19:30 2/2']);
+    eq('30분 이용은 분할 안 함', alloc([ev('R1', 18, 0, 18, 15), ev('R2', 18, 15, 18, 30), ev('R4', 18, 0, 19, 0)], '피아노', T(18), T(18, 30)), '해당 시간·악기 기준 잔여 연습실 없음');
+    // 실패 사유
+    const busyPiano = [ev('R1', 10, 0, 12, 0), ev('R2', 10, 0, 12, 0), ev('R4', 10, 0, 12, 0)];
+    eq('악기 기준 잔여 없음 (F는 비어 있음)', alloc(busyPiano, '피아노', T(10), T(11)), '해당 시간·악기 기준 잔여 연습실 없음');
+    const allBusy = [ev('R1', 15, 0, 16, 0), ev('R2', 15, 0, 16, 0), ev('R3', 15, 0, 16, 0), ev('R4', 15, 0, 16, 0)];
+    eq('잔여 없음 (60분)', alloc(allBusy, '피아노', T(15), T(16)), '해당 시간 잔여 연습실 없음');
+    eq('2회 이상 이동 불가 (90분)', alloc(allBusy, '피아노', T(15), T(16, 30)), '2회 이상 방 이동 예약 불가');
+    eq('사용 중지 룸 제외(목록에 없으면 배정 안 함)',
+      allocateRooms_({ events: [], rooms: ROOMS.filter(function (r) { return r.id !== 'R1'; }), instrument: '피아노', start: T(10), end: T(11), settings: ST }).segments[0].room.name, 'Bb');
+
+    // --- 날짜·시각 조건 ---
+    const SET = { durations: [30, 60, 90, 120], openMin: 480, closeMin: 1440, bookableDays: 7 };
+    const DATES = ['2026-11-20', '2026-11-21', '2026-11-22', '2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26'];
+    const timing = function (dateKey, start, dur, nowMin) {
+      return checkBookingTiming_({ dateKey: dateKey, startMin: parseHHMM_(start), duration: dur, todayKey: '2026-11-20', nowMin: nowMin || 600, dates: DATES, settings: SET });
+    };
+    eq('정상', timing('2026-11-21', '10:00', 60), '');
+    eq('과거 시각', timing('2026-11-20', '09:59', 60), '과거 시간 예약 불가');
+    eq('지금 시각 정각은 허용', timing('2026-11-20', '10:00', 60), '');
+    eq('과거 날짜', timing('2026-11-19', '10:00', 60), '과거 시간 예약 불가');
+    eq('7일 이후', timing('2026-11-27', '10:00', 60), '현재로부터 7일 이후 날짜 예약 불가');
+    eq('운영 시작 전', timing('2026-11-21', '07:59', 30), '연습실 운영시간 외 예약 불가');
+    eq('24:00 종료 허용', timing('2026-11-21', '23:00', 60), '');
+    eq('자정 넘김 불가', timing('2026-11-21', '23:31', 30), '연습실 운영시간 외 예약 불가');
+    eq('선택지 밖 이용시간', timing('2026-11-21', '10:00', 45), '선택할 수 없는 이용 시간입니다');
+
+    // --- 분할 예약 묶기 ---
+    const items = [
+      { studentNo: 'A', roomName: 'Bb', start: T(19), end: T(20), part: '2/2' },
+      { studentNo: 'A', roomName: 'Eb', start: T(18), end: T(19), part: '1/2' },
+      { studentNo: 'A', roomName: 'Db', start: T(10), end: T(11), part: '' }
+    ];
+    const grouped = groupSplitBookings_(items);
+    eq('묶기: 2건', grouped.length, 2);
+    eq('묶기: 분할 건 시간', [new Date(grouped[1].start).getHours(), new Date(grouped[1].end).getHours(), grouped[1].segments.length], [18, 20, 2]);
+    eq('묶기: 짝 없는 [2/2]는 단독', groupSplitBookings_([items[0]]).length, 1);
+
+    // 결과 표시
+    const fails = results.filter(function (r) { return !r.ok; });
+    document.getElementById('summary').innerHTML = fails.length
+      ? '<b class="fail">실패 ' + fails.length + '건 / 전체 ' + results.length + '건</b>'
+      : '<b class="pass">전체 ' + results.length + '건 통과 ✔</b>';
+    document.getElementById('out').innerHTML = results.map(function (r) {
+      return '<li class="' + (r.ok ? 'pass' : 'fail') + '">' + (r.ok ? '✔ ' : '✘ ') + r.name + r.detail + '</li>';
+    }).join('');
+    window.TEST_RESULT = { total: results.length, fails: fails.map(function (f) { return f.name + f.detail; }) };
+  </script>
+</body>
+</html>
