@@ -79,6 +79,16 @@ button, input, select { font-family: inherit; font-size: 16px; }
   font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
 }
 .input:focus { box-shadow: 0 0 0 3px rgba(3, 90, 23, 0.15); }
+/* 아이폰 사파리: 시각 입력 상자가 자체 최소 너비 때문에 화면 오른쪽으로 튀어나가는 문제 방지 */
+input.input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+}
+input.input[type="time"]::-webkit-date-and-time-value { text-align: left; }
 
 .btn {
   display: inline-block;

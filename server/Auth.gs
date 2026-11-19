@@ -128,8 +128,12 @@ function memberFromRow_(r) {
   const status = String(r['상태'] || '').trim() || STATUS.ACTIVE;   // 빈칸은 '활성'으로 봄
   const studentNo = normStudentNo_(r['수강생번호']);
   const instruments = splitList_(r['등록악기']);
+  const role = String(r['역할'] || '').trim() || ROLE.STUDENT;
   let cannotBookReason = '';
-  if (status !== STATUS.ACTIVE) cannotBookReason = status + ' 상태에서는 예약할 수 없습니다.';
+  // 원장(관리자) 줄에 수강생번호가 없으면: 예약 기능이 없는 관리자 계정이라고 안내
+  // (원장 계정에 예약용 회원을 연결하려면 같은 로그인ID로 수강생번호·악기가 있는 줄을 따로 추가)
+  if (role === ROLE.ADMIN && !studentNo) cannotBookReason = '원장(관리자) 계정은 연습실 예약 기능이 없습니다. 시간표 조회와 관리 기능을 이용해 주세요.';
+  else if (status !== STATUS.ACTIVE) cannotBookReason = status + ' 상태에서는 예약할 수 없습니다.';
   else if (!studentNo) cannotBookReason = '수강생 번호가 등록되지 않아 예약할 수 없습니다. 학원에 문의해 주세요.';
   else if (!instruments.length) cannotBookReason = '등록된 악기가 없어 예약할 수 없습니다. 학원에 문의해 주세요.';
   return {
@@ -137,7 +141,7 @@ function memberFromRow_(r) {
     name: String(r['이름'] || '').trim(),
     loginId: normalizeLoginId_(r['로그인ID']),
     phone: normalizeLoginId_(r['연락처']) || normalizeLoginId_(r['로그인ID']),
-    role: String(r['역할'] || '').trim() || ROLE.STUDENT,
+    role: role,
     status: status,
     studentNo: studentNo,
     instruments: instruments,

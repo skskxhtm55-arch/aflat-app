@@ -322,14 +322,12 @@ function viewTimetable(params, seq) {
     '<div class="page-head"><h2>♫ AFLAT 연습실 현황 ♪</h2><p>빈자리를 확인하고 예약해 보세요! *_*♬</p></div>' +
     dateChipsHtml(S.me.dates, date) +
     '<div id="tt"></div>' +
-    (canBook
-      ? '<a class="floating-btn" id="goBook" href="#book?date=' + date + '">✨ 연습실 예약하러 가기 ✨</a>'
-      : '<div class="floating-btn off">' + esc(reason) + '</div>'));
+    // 예약은 하단 '예약하기' 탭으로 합니다. 예약할 수 없는 계정만 그 이유를 안내합니다.
+    (canBook ? '' : '<div class="floating-btn off">' + esc(reason) + '</div>'));
 
   const load = async function (d) {
     S.ttDate = d;
     $$('#dates .chip').forEach(function (c) { c.classList.toggle('on', c.dataset.date === d); });
-    if ($('#goBook')) $('#goBook').href = '#book?date=' + d;
     $('#tt').innerHTML = '<div class="loading">시간표를 그리고 있어요... ⏳✨</div>';
     try {
       const tt = await call('getTimetable', { date: d });
@@ -835,6 +833,12 @@ async function boot() {
     }
   }
   window.addEventListener('hashchange', render);
+  // 지금 보고 있는 탭을 다시 누르면(예: 예약 완료 화면에서 '예약하기') 주소가 그대로라
+  // 화면이 바뀌지 않으므로, 그 탭의 처음 화면을 다시 그립니다.
+  $('#nav').addEventListener('click', function (ev) {
+    const a = ev.target.closest('a');
+    if (a && location.hash === a.getAttribute('href')) { ev.preventDefault(); render(); }
+  });
   render();
 }
 
