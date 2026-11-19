@@ -366,6 +366,7 @@ function viewBook(params, seq) {
     duration: 0
   };
   let tt = null;   // 선택한 날짜의 시간표 + 내 사용량
+  let submitErr = '';   // 서버가 예약을 거절한 사유. 선택을 바꾸기 전까지 계속 보여줌
 
   setView(
     '<div class="page-head"><h2>연습실 예약</h2><p>룸은 자동으로 배정돼요</p></div>' +
@@ -427,7 +428,7 @@ function viewBook(params, seq) {
       else if (startMin < st.openMin || startMin >= st.closeMin) err = '운영시간(' + minToHHMM(st.openMin) + '~' + minToHHMM(st.closeMin) + ') 안에서 선택해 주세요.';
     }
     if (tt && remaining < Math.min.apply(null, st.durations)) err = '이 날은 하루 예약 한도(' + st.maxDailyMin + '분)를 모두 사용했어요.';
-    $('#err').textContent = err;
+    $('#err').textContent = err || submitErr;
 
     const ready = f.instrument && !isNaN(startMin) && f.duration && !err && tt;
     $('#summary').textContent = ready
@@ -454,6 +455,12 @@ function viewBook(params, seq) {
   }
 
   fillInstruments();
+  // 수강생·악기·날짜·시각·이용시간 중 무엇이든 바꾸면 이전 거절 사유는 지웁니다.
+  ['click', 'input', 'change'].forEach(function (type) {
+    $('#f').addEventListener(type, function (ev) {
+      if (ev.target.closest('.chip, input, select, button')) submitErr = '';
+    }, true);
+  });
   if ($('#stuChips')) {
     $('#stuChips').addEventListener('click', function (ev) {
       const b = ev.target.closest('.chip'); if (!b) return;
@@ -492,7 +499,9 @@ function viewBook(params, seq) {
         showBookingDone(r);
       } catch (e) {
         if (e.handled || stale(seq)) return;
-        $('#err').textContent = '예약하지 못했어요: ' + e.message;
+        // 시간표를 다시 불러오면 안내 칸이 새로 그려지므로, 사유를 따로 보관해 두고 계속 보여줍니다.
+        submitErr = '예약하지 못했어요: ' + e.message;
+        toast(submitErr);
         loadDay();   // 그 사이 바뀐 현황 다시 보여주기
       }
     });
