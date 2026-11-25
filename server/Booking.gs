@@ -198,7 +198,20 @@ function loadOwnedBooking_(ctx, ref, st) {
     const room = rooms.filter(function (r) { return r.id === String(x && x.r); })[0];
     if (!room) notFound();
     const cal = CalendarApp.getCalendarById(room.calendarId);
-    const ev = cal ? cal.getEventById(String(x.e || '')) : null;
+    const eventId = String(x.e || '');
+    // ※ 캘린더는 방금 지운 일정도 ID로는 찾아지는 경우가 있어, 그 시간대 일정 목록에 실제로 있는지까지 확인
+    let ev = null;
+    try {
+      ev = cal ? cal.getEventById(eventId) : null;
+      if (ev) {
+        const alive = cal.getEvents(ev.getStartTime(), ev.getEndTime())
+          .some(function (e) { return e.getId() === eventId; });
+        if (!alive) ev = null;
+      }
+    } catch (e) {
+      console.warn('예약 일정 확인 실패(지워진 일정으로 처리): ' + e);
+      ev = null;
+    }
     if (!ev) notFound();
     const info = parseEventTitle_(ev.getTitle());
     if (!info || info.type !== '연습' || myNos.indexOf(info.studentNo) < 0) {

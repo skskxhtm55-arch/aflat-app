@@ -714,6 +714,7 @@ function openBookingActions(b, showName, onDone) {
     '<h3>연습실 예약</h3>' +
     '<div class="card">' + bookingRowHtml(b, showName) + '</div>' +
     '<div class="sub">예약이 끝나기 전까지 변경·취소할 수 있어요.</div>' +
+    '<div class="msg err" id="mErr"></div>' +
     '<div class="btn-col">' +
     '<button class="btn primary" id="mEdit" type="button">변경하기</button>' +
     '<button class="btn danger" id="mCancel" type="button">예약 취소</button>' +
@@ -724,18 +725,26 @@ function openBookingActions(b, showName, onDone) {
     closeModal();
     go('book?edit=1');
   });
-  $('#mCancel', m).addEventListener('click', function () {
+  $('#mCancel', m).addEventListener('click', async function () {
     if (!confirm(b.dateText + ' ' + b.timeText + ' 연습실 예약을 취소할까요?\n취소하면 되돌릴 수 없어요.')) return;
-    withBusy($('#mCancel', m), '취소 중...', async function () {
+    let gone = false;   // 이미 취소·변경되어 더 이상 처리할 수 없는 예약인지
+    await withBusy($('#mCancel', m), '취소 중...', async function () {
       try {
         await call('cancelBooking', { ref: b.ref });
         closeModal();
         toast('예약을 취소했어요.');
         onDone();
       } catch (e) {
-        if (!e.handled) toast(e.message);
+        if (e.handled) return;
+        $('#mErr', m).textContent = e.message;   // 창 안에 바로 보이게
+        gone = e.code === 'BOOKING' || e.code === 'FORBIDDEN';
       }
     });
+    // 이미 취소·변경된 예약이면 버튼을 막고, 뒤의 목록을 새로 불러옴 (버튼 원상복구 뒤에 막아야 함)
+    if (gone) {
+      $('#mEdit', m).disabled = true; $('#mCancel', m).disabled = true;
+      onDone();
+    }
   });
 }
 

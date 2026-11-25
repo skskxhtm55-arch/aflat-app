@@ -260,3 +260,6 @@ textarea.input { resize: vertical; min-height: 180px; line-height: 1.6; }
 .btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .btn-col .btn { width: 100%; }
 .item-btn + .item-btn .item, .item + .item-btn .item, .item-btn + .item { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 12px; }
+
+/* 알림(toast)은 팝업 창보다 위에 */
+#toast { z-index: 400; }
