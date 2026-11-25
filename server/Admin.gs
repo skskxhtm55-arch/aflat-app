@@ -93,6 +93,7 @@ function apiAdminCreateMember_(ctx, data) {
       '수강생번호': studentNo, '등록악기': instruments.join(';'), '상태': status, '가입일': new Date()
     });
 
+    invalidateCtx_(loginId);   // 같은 번호 계정에 회원이 하나 늘었으므로 기억 지우기
     const account = findAccountRow_(readTable_(SHEET.ACCOUNTS), loginId);
     if (account && account['비밀번호해시']) {
       return { memberId: memberId, linked: true, message: '기존 계정(' + formatPhone_(loginId) + ')에 연결했습니다. 기존 비밀번호로 로그인하면 됩니다.' };

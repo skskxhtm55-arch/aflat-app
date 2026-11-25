@@ -101,6 +101,7 @@ function setAccountPassword_(loginId, password, isTemp) {
     values['발급일시'] = now;
     appendRow_(SHEET.ACCOUNTS, values);
   }
+  invalidateCtx_(loginId);   // 임시비밀번호 여부가 바뀌었으므로 기억 지우기
   return { expiresAt: expires };
 }
 
@@ -162,16 +163,67 @@ function linkedMembers_(loginId) {
 function buildContext_(loginId, accountRow, accountTable, tokenHash) {
   const members = linkedMembers_(loginId);
   if (!members.length) fail_('사용이 중지된 계정입니다. 학원에 문의해 주세요.', 'AUTH');
+  return contextFromSnapshot_(loginId, tokenHash, { mustChangePassword: isYes_(accountRow['임시비밀번호여부']), members: members });
+}
+
+function contextFromSnapshot_(loginId, tokenHash, snap) {
   return {
     loginId: loginId,
     tokenHash: tokenHash || '',
-    account: accountRow,
-    accountTable: accountTable,
-    members: members,
-    isAdmin: members.some(function (m) { return m.role === ROLE.ADMIN; }),
-    isTeacher: members.some(function (m) { return m.role === ROLE.TEACHER; }),
-    mustChangePassword: isYes_(accountRow['임시비밀번호여부'])
+    members: snap.members,
+    isAdmin: snap.members.some(function (m) { return m.role === ROLE.ADMIN; }),
+    isTeacher: snap.members.some(function (m) { return m.role === ROLE.TEACHER; }),
+    mustChangePassword: !!snap.mustChangePassword
   };
+}
+
+// ---------------------------------------------------------------------
+// [속도 개선 P1] 로그인한 사람의 정보(계정의 임시비밀번호 여부 + 연결된 회원)를 10분간 기억
+// - 기억해 두면 시간표·내 예약 같은 조회 요청이 시트를 열지 않아 1~2초 빨라집니다.
+// - 다음 경우에는 기억을 지워 바로 반영합니다:
+//   · 회원·계정 시트를 손으로 고칠 때 (onEdit, Menu.gs)
+//   · 시트 메뉴 '설정 즉시 반영'
+//   · 비밀번호 변경·임시 비밀번호 발급·관리 화면 회원 등록
+// - 예약 확정·변경은 기억을 쓰지 않고 회원 시트를 직접 다시 확인합니다(휴원 전환 등 정확성).
+// ---------------------------------------------------------------------
+const CTX_CACHE_SEC = 600;
+let CTX_GEN_ = null;
+
+/** 기억 세대 번호: 바꾸면 모든 사람의 기억이 한꺼번에 무효가 됨 */
+function ctxGen_() {
+  if (CTX_GEN_ === null) CTX_GEN_ = PropertiesService.getScriptProperties().getProperty('CTX_GEN') || '0';
+  return CTX_GEN_;
+}
+function ctxCacheKey_(loginId) { return 'ctx_' + ctxGen_() + '_' + loginId; }
+
+/** 한 사람의 기억 지우기 */
+function invalidateCtx_(loginId) { cacheRemove_(ctxCacheKey_(normalizeLoginId_(loginId))); }
+
+/** 모든 사람의 기억 지우기 (세대 번호 바꾸기) */
+function invalidateAllCtx_() {
+  CTX_GEN_ = String(Date.now());
+  PropertiesService.getScriptProperties().setProperty('CTX_GEN', CTX_GEN_);
+}
+
+/** 기억해 둔 정보가 있으면 쓰고, 없으면 시트에서 읽어 기억 */
+function loadContextSnapshot_(loginId) {
+  const key = ctxCacheKey_(loginId);
+  const cached = cacheGetJson_(key);
+  if (cached && cached.members) return cached;
+  const account = findAccountRow_(readTable_(SHEET.ACCOUNTS), loginId);
+  if (!account) fail_('로그인이 필요합니다.', 'AUTH');
+  const members = linkedMembers_(loginId);
+  if (!members.length) fail_('사용이 중지된 계정입니다. 학원에 문의해 주세요.', 'AUTH');
+  const snap = { mustChangePassword: isYes_(account['임시비밀번호여부']), members: members };
+  cachePutJson_(key, snap, CTX_CACHE_SEC);
+  return snap;
+}
+
+/** 예약 확정·변경용: 회원 시트를 직접 다시 읽은 최신 회원 목록 */
+function freshMembers_(ctx) {
+  const members = linkedMembers_(ctx.loginId);
+  if (!members.length) fail_('사용이 중지된 계정입니다. 학원에 문의해 주세요.', 'AUTH');
+  return members;
 }
 
 /** 화면에 돌려줄 "내 정보" */
@@ -229,10 +281,7 @@ function authenticate_(token) {
   }
   if (!loginId) fail_('로그인이 만료되었습니다. 다시 로그인해 주세요.', 'AUTH');
 
-  const accounts = readTable_(SHEET.ACCOUNTS);
-  const account = findAccountRow_(accounts, loginId);
-  if (!account) fail_('로그인이 필요합니다.', 'AUTH');
-  return buildContext_(loginId, account, accounts, tokenHash);
+  return contextFromSnapshot_(loginId, tokenHash, loadContextSnapshot_(loginId));
 }
 
 function createSession_(loginId, deviceInfo) {
@@ -333,7 +382,8 @@ function apiGetMe_(ctx) {
 function apiChangePassword_(ctx, data) {
   const current = String(data.currentPassword || '');
   const next = String(data.newPassword || '');
-  if (!verifyPassword_(ctx.account, current)) fail_('현재 비밀번호가 올바르지 않습니다.');
+  const account = findAccountRow_(readTable_(SHEET.ACCOUNTS), ctx.loginId);   // 비밀번호는 기억 말고 시트에서
+  if (!account || !verifyPassword_(account, current)) fail_('현재 비밀번호가 올바르지 않습니다.');
   checkPasswordRule_(next, ctx.isAdmin);
   if (next === current) fail_('현재와 다른 비밀번호를 입력해 주세요.');
   if (next.indexOf(ctx.loginId) >= 0) fail_('비밀번호에 휴대폰 번호를 넣을 수 없습니다.');

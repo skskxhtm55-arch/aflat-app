@@ -44,15 +44,33 @@ function runMenu_(fn) {
   }
 }
 
-/** 운영설정·룸 시트를 고친 뒤 바로 반영 */
+/** 시트를 고친 뒤 바로 반영 (운영설정·룸·회원·계정·소식, 캘린더 기억까지 모두) */
 function menuClearCache() {
   runMenu_(function () {
-    const keys = ['settings', 'rooms'];
+    const keys = ['settings', 'rooms', POSTS_CACHE_KEY];
     const today = todayKey_();
     for (let i = -1; i <= 31; i++) keys.push('ev_' + addDaysKey_(today, i));
     cacheRemove_(keys);
-    alert_('반영했습니다. 운영설정·룸 시트의 변경 내용이 지금부터 적용됩니다.');
+    invalidateAllCtx_();
+    alert_('반영했습니다. 시트의 변경 내용이 지금부터 앱에 적용됩니다.');
   });
+}
+
+/**
+ * 시트를 손으로 고치면 자동 실행 (구글 "단순 트리거")
+ * 고친 시트에 맞는 기억(캐시)을 지워 앱에 바로 반영되게 합니다.
+ * ※ 앱이 쓰는 기록(예약로그 등)은 손으로 고쳐도 아무 일도 하지 않습니다.
+ */
+function onEdit(e) {
+  try {
+    const name = e && e.range ? e.range.getSheet().getName() : '';
+    if (name === SHEET.MEMBERS || name === SHEET.ACCOUNTS) invalidateAllCtx_();
+    else if (name === SHEET.SETTINGS) cacheRemove_(['settings']);
+    else if (name === SHEET.ROOMS) cacheRemove_(['rooms']);
+    else if (name === SHEET.POSTS) cacheRemove_([POSTS_CACHE_KEY]);
+  } catch (err) {
+    console.warn('onEdit 캐시 정리 실패: ' + err);
+  }
 }
 
 /**

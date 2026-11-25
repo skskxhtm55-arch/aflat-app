@@ -46,8 +46,8 @@ function placeBooking_(ctx, data, oldRef) {
   const duration = parseInt(data.duration, 10);
   const isChange = !!oldRef;
 
-  // 1. 예약자 확인
-  const member = ctx.members.filter(function (m) { return m.studentNo && m.studentNo === studentNo; })[0];
+  // 1. 예약자 확인 (기억해 둔 정보 대신 회원 시트를 직접 다시 확인: 휴원 전환 등이 바로 반영되게)
+  const member = freshMembers_(ctx).filter(function (m) { return m.studentNo && m.studentNo === studentNo; })[0];
   if (!member) fail_('예약할 수강생을 선택해 주세요.', 'BOOKING');
   if (!member.canBook) fail_(member.cannotBookReason, 'BOOKING');
 

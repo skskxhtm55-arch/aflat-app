@@ -27,9 +27,12 @@ function fail_(message, code) {
  * 기본은 이 스크립트가 연결된(컨테이너) 스프레드시트입니다.
  * 스크립트 속성 SPREADSHEET_ID 가 있으면 그 시트를 씁니다(특별한 경우에만).
  */
+let SS_OPENED_ = null;   // 한 번의 요청 안에서 연 스프레드시트를 다시 씀 (여는 데 시간이 걸리므로)
 function ss_() {
+  if (SS_OPENED_) return SS_OPENED_;
   const id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  SS_OPENED_ = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  return SS_OPENED_;
 }
 
 function sheet_(name) {
