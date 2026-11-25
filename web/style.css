@@ -234,3 +234,7 @@ details > summary { cursor: pointer; color: var(--green); font-size: 16px; paddi
 .search { margin-bottom: 12px; }
 .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
 .tabs .chip { flex: 1; }
+
+/* 내 예약: 연습/레슨 구분 표시 */
+.badge.practice { background: var(--mint, #D3F7EC); color: var(--green, #035A17); margin: 0 6px 0 0; }
+.badge.lesson { background: var(--coral, #E97A76); color: #fff; margin: 0 6px 0 0; }

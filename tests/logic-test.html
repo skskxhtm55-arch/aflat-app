@@ -87,7 +87,22 @@
     eq('사용 중지 룸 제외(목록에 없으면 배정 안 함)',
       allocateRooms_({ events: [], rooms: ROOMS.filter(function (r) { return r.id !== 'R1'; }), instrument: '피아노', start: T(10), end: T(11), settings: ST }).segments[0].room.name, 'Bb');
 
-    // --- 날짜·시각 조건 ---
+    // --- 내 일정 고르기 (연습 + 레슨) ---
+    const MYEV = [
+      { roomName: 'Bb', start: 1, end: 2, title: '(레슨)Bb_김테스트_피아노_TST001' },
+      { roomName: 'Eb', start: 3, end: 4, title: '(연습)Eb_김테스트_피아노_TST001 [1/2]' },
+      { roomName: 'Bb', start: 4, end: 5, title: '(연습)Bb_김테스트_피아노_TST001 [2/2]' },
+      { roomName: 'Eb', start: 6, end: 7, title: '(연습)Eb_이테스트_기타_TST0011' },
+      { roomName: 'Db', start: 8, end: 9, title: '(레슨)Db_이테스트_기타_TST0011' },
+      { roomName: 'Eb', start: 10, end: 11, title: '강사 개인연습' }
+    ];
+    const mine = pickMySchedule_(MYEV, { TST001: { name: '김테스트' } });
+    eq('내 일정: 정확 일치만 (레슨 1 + 연습 2)', mine.length, 3);
+    eq('내 일정: 레슨 포함', mine.filter(function (x) { return x.type === '레슨'; }).length, 1);
+    eq('내 일정: 분할 연습은 1건으로', groupSplitBookings_(mine).length, 2);
+    eq('내 일정: 레슨 룸은 실제 캘린더 룸', mine[0].roomName, 'Bb');
+
+
     const SET = { durations: [30, 60, 90, 120], openMin: 480, closeMin: 1440, bookableDays: 7 };
     const DATES = ['2026-11-20', '2026-11-21', '2026-11-22', '2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26'];
     const timing = function (dateKey, start, dur, nowMin) {

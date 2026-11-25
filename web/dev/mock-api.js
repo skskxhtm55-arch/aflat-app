@@ -76,10 +76,11 @@
       case 'getMyBookings':
         return {
           upcoming: [
-            { dateText: '11월 20일 (금)', timeText: '19:00~20:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false },
-            { dateText: '11월 22일 (일)', timeText: '18:00~20:00', roomText: 'Eb(18:00~19:00) → Bb(19:00~20:00)', instrument: '피아노', studentName: '김테스트', isSplit: true }
+            { type: '레슨', dateText: '11월 20일 (금)', timeText: '14:00~15:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false },
+            { type: '연습', dateText: '11월 20일 (금)', timeText: '19:00~20:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false },
+            { type: '연습', dateText: '11월 22일 (일)', timeText: '18:00~20:00', roomText: 'Eb(18:00~19:00) → Bb(19:00~20:00)', instrument: '피아노', studentName: '김테스트', isSplit: true }
           ],
-          past: [{ dateText: '11월 15일 (일)', timeText: '10:00~11:00', roomText: 'Db', instrument: '보컬', studentName: '김테스트', isSplit: false }],
+          past: [{ type: '연습', dateText: '11월 15일 (일)', timeText: '10:00~11:00', roomText: 'Db', instrument: '보컬', studentName: '김테스트', isSplit: false }],
           multipleStudents: true
         };
       case 'adminListMembers':

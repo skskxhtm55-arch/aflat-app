@@ -198,6 +198,32 @@ function checkBookingTiming_(p) {
 }
 
 /**
+ * 캘린더 일정 중 "내 일정"만 고릅니다. (기능 C-4·C-5)
+ * - "(연습)"·"(레슨)" 일정 중 수강생 번호가 정확히 일치하는 것만 (PAM004 ≠ PAM0041)
+ * - 제목 규칙을 벗어난 일정(강사 개인연습 등)은 제외
+ * events: [{ roomName, start, end, title }], myNos: { 수강생번호: { name } }
+ * → [{ type: '연습'|'레슨', studentNo, studentName, instrument, roomName, start, end, part }]
+ */
+function pickMySchedule_(events, myNos) {
+  const items = [];
+  events.forEach(function (ev) {
+    const info = parseEventTitle_(ev.title);
+    if (!info || !myNos[info.studentNo]) return;
+    items.push({
+      type: info.type,
+      studentNo: info.studentNo,
+      studentName: myNos[info.studentNo].name,
+      instrument: info.instrument,
+      roomName: ev.roomName,          // 실제로 일정이 있는 룸 캘린더의 이름
+      start: ev.start,
+      end: ev.end,
+      part: info.type === '연습' ? info.part : ''
+    });
+  });
+  return items;
+}
+
+/**
  * 내 예약 목록에서 분할 예약([1/2]·[2/2])을 한 건으로 묶습니다.
  * 같은 수강생 번호, [1/2]의 종료 시각 = [2/2]의 시작 시각이면 한 건.
  * items: [{ studentNo, roomName, start, end, part, ... }] → [{ start, end, segments: [...] , ...첫 구간 정보 }]
@@ -213,7 +239,7 @@ function groupSplitBookings_(items) {
     if (a.part === '1/2') {
       for (let j = i + 1; j < sorted.length; j++) {
         const b = sorted[j];
-        if (!used[j] && b.part === '2/2' && b.studentNo === a.studentNo && b.start === a.end) {
+        if (!used[j] && b.part === '2/2' && b.studentNo === a.studentNo && b.type === a.type && b.start === a.end) {
           used[j] = true;
           merged = Object.assign({}, a, { end: b.end, segments: [a, b] });
           break;

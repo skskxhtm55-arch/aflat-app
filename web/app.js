@@ -322,7 +322,7 @@ async function viewHome(params, seq) {
     '<div class="page-head"><h2>♫ AFLAT MUSIC STUDIO ♪</h2><p>' + esc(S.me.displayName || '') + '님, 반가워요!</p></div>' +
     '<h3 class="section-title">소식</h3><div class="card"><div class="sub">소식 게시판을 준비하고 있어요.</div></div>' +
     '<h3 class="section-title">내 다음 일정</h3><div id="next"><div class="loading">불러오는 중...</div></div>');
-  // 다가오는 일정 중 가장 가까운 2건 (레슨 일정은 다음 단계에서 함께 표시)
+  // 다가오는 일정(연습실 예약 + 레슨) 중 가장 가까운 2건
   try {
     const r = await call('getMyBookings');
     if (stale(seq)) return;
@@ -555,21 +555,24 @@ function showBookingDone(r) {
 // ---------------------------------------------------------------------
 /** 내 예약 한 줄 (홈 '내 다음 일정'과 '내 예약' 탭에서 함께 사용) */
 function bookingRowHtml(b, showName) {
-  return '<div class="item"><div><div class="main">' + esc(b.dateText) + ' ' + esc(b.timeText) +
+  const lesson = b.type === '레슨';
+  return '<div class="item"><div><div class="main">' +
+    '<span class="badge ' + (lesson ? 'lesson' : 'practice') + '">' + (lesson ? '레슨' : '연습') + '</span>' +
+    esc(b.dateText) + ' ' + esc(b.timeText) +
     (b.isSplit ? '<span class="badge">룸 이동</span>' : '') + '</div>' +
     '<div class="sub">' + esc(roomLabel(b.roomText)) + ' · ' + esc(b.instrument) +
     (showName ? ' · ' + esc(b.studentName) : '') + '</div></div></div>';
 }
 
 async function viewMy(params, seq) {
-  setView('<div class="page-head"><h2>내 예약</h2><p>예약 취소·변경은 학원에 직접 연락해 주세요</p></div><div id="list"><div class="loading">불러오는 중...</div></div>');
+  setView('<div class="page-head"><h2>내 예약</h2><p>연습실 예약과 레슨 일정이에요 · 예약 취소·변경은 학원에 직접 연락해 주세요</p></div><div id="list"><div class="loading">불러오는 중...</div></div>');
   try {
     const r = await call('getMyBookings');
     if (stale(seq)) return;
     const row = function (b) { return bookingRowHtml(b, r.multipleStudents); };
     $('#list').innerHTML =
-      '<div class="card">' + (r.upcoming.length ? r.upcoming.map(row).join('') : '<div class="sub">다가오는 예약이 없어요.</div>') + '</div>' +
-      (r.past.length ? '<details><summary>지난 예약 (최근 30일, ' + r.past.length + '건)</summary><div class="card">' + r.past.map(row).join('') + '</div></details>' : '');
+      '<div class="card">' + (r.upcoming.length ? r.upcoming.map(row).join('') : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>' +
+      (r.past.length ? '<details><summary>지난 일정 (최근 30일, ' + r.past.length + '건)</summary><div class="card">' + r.past.map(row).join('') + '</div></details>' : '');
   } catch (e) {
     if (!e.handled && !stale(seq)) $('#list').innerHTML = errorBox(e);
   }
