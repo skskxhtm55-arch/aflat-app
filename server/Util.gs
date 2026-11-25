@@ -38,13 +38,36 @@ function sheet_(name) {
   return sh;
 }
 
+// ---------------------------------------------------------------------
+// [성능 측정] 앱 주소에 ?perf=1 을 붙였을 때만 요청별 처리 시간을 응답에 담습니다.
+// (진단용. 일반 사용에는 영향 없음 — 시간을 더하는 것뿐)
+// ---------------------------------------------------------------------
+let PERF_ = null;
+function perfStart_() {
+  PERF_ = { t0: Date.now(), auth: 0, sheet: 0, sheetN: 0, cal: 0, calN: 0, lock: 0, http: 0, httpN: 0 };
+}
+/** kind: 'sheet' | 'cal' | 'lock' | 'http' | 'auth' */
+function perfAdd_(kind, startedAt) {
+  if (!PERF_) return;
+  PERF_[kind] += Date.now() - startedAt;
+  if (PERF_[kind + 'N'] !== undefined) PERF_[kind + 'N']++;
+}
+function perfResult_() {
+  if (!PERF_) return null;
+  const p = PERF_;
+  return { total: Date.now() - p.t0, auth: p.auth, sheet: p.sheet, sheetN: p.sheetN, cal: p.cal, calN: p.calN,
+           lock: p.lock, http: p.http, httpN: p.httpN };
+}
+
 /**
  * 시트 전체를 읽어 [{열이름: 값, _row: 행번호}] 형태로 돌려줍니다.
  * 빈 줄은 건너뜁니다.
  */
 function readTable_(name) {
+  const t = Date.now();
   const sh = sheet_(name);
   const values = sh.getDataRange().getValues();
+  perfAdd_('sheet', t);
   const headers = (values[0] || []).map(function (h) { return String(h).trim(); });
   const rows = [];
   for (let i = 1; i < values.length; i++) {

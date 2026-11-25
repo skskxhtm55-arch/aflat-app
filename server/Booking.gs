@@ -77,9 +77,11 @@ function placeBooking_(ctx, data, oldRef) {
 
   // 4. 잠금
   const lock = LockService.getScriptLock();
+  const tLock = Date.now();
   if (!lock.tryLock(25000)) {
     fail_('지금 예약이 몰려 있어요. 잠시 후 다시 시도해 주세요.', 'BUSY');
   }
+  perfAdd_('lock', tLock);
   let segments;
   let old = null;
   try {

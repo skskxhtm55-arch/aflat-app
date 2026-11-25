@@ -46,8 +46,10 @@ function routes_() { return {
 /** 앱(화면)의 모든 요청이 들어오는 곳 */
 function doPost(e) {
   let out;
+  let body = {};
+  perfStart_();
   try {
-    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     // 점검 모드: 스크립트 속성 MAINTENANCE_MESSAGE 에 문구를 넣으면 모든 요청에 그 문구를 보여줍니다.
     // (실운영 전환 후 문제가 생겨 기존 구글폼으로 되돌릴 때 사용. 문구를 지우면 해제)
     const maintenance = PropertiesService.getScriptProperties().getProperty('MAINTENANCE_MESSAGE');
@@ -58,7 +60,9 @@ function doPost(e) {
 
     let ctx = null;
     if (route.auth !== 'none') {
+      const tAuth = Date.now();
       ctx = authenticate_(body.token);
+      perfAdd_('auth', tAuth);
       if (ctx.mustChangePassword && !route.allowTemp) {
         fail_('비밀번호를 먼저 변경해 주세요.', 'MUST_CHANGE_PASSWORD');
       }
@@ -74,6 +78,7 @@ function doPost(e) {
       out = { ok: false, code: 'SERVER', error: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' };
     }
   }
+  if (body && body.perf === true) out.perf = perfResult_();   // 진단용 처리 시간 (?perf=1)
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 

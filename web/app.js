@@ -346,6 +346,7 @@ async function viewHome(params, seq) {
     $('#next').innerHTML = '<div class="card">' +
       (next.length ? next.map(function (b) { return bookingRowHtml(b, r.multipleStudents); }).join('')
                    : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>';
+    if (Api.perf) Perf.mark('홈 - 내 다음 일정 표시 완료');
   } catch (e) {
     if (!e.handled && !stale(seq)) $('#next').innerHTML = errorBox(e);
   }
@@ -362,6 +363,7 @@ async function loadPostList(seq, limit) {
     const list = await call('listPosts');
     if (stale(seq)) return;
     const shown = limit ? list.slice(0, limit) : list;
+    if (Api.perf) Perf.mark('소식 목록 표시 완료');
     $('#posts').innerHTML = '<div class="card">' +
       (shown.length ? shown.map(function (p) {
         return '<a class="item post-item" href="#post?id=' + encodeURIComponent(p.id) + '"><div>' +
@@ -1069,6 +1071,7 @@ async function boot() {
       }
     }
   }
+  if (Api.perf) Perf.mark('로그인 확인 끝, 첫 화면 그리기 시작');
   window.addEventListener('hashchange', render);
   // 지금 보고 있는 탭을 다시 누르면(예: 예약 완료 화면에서 '예약하기') 주소가 그대로라
   // 화면이 바뀌지 않으므로, 그 탭의 처음 화면을 다시 그립니다.

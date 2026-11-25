@@ -49,7 +49,10 @@ function loadEventsInRange_(rooms, from, to) {
       missing.push(room.id);
       return;
     }
-    cal.getEvents(from, to).forEach(function (ev) {
+    const t = Date.now();
+    const list = cal.getEvents(from, to);
+    perfAdd_('cal', t);
+    list.forEach(function (ev) {
       events.push({
         id: ev.getId(),          // 일정 ID (예약 변경·취소 때 본인 일정을 다시 찾는 데 사용)
         roomId: room.id,

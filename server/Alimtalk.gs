@@ -50,6 +50,7 @@ function sendAlimtalk_(kind, toPhone, templateId, variables, opts) {
           }
         }
       };
+      const tHttp = Date.now();
       const res = UrlFetchApp.fetch('https://api.solapi.com/messages/v4/send', {
         method: 'post',
         contentType: 'application/json',
@@ -57,6 +58,7 @@ function sendAlimtalk_(kind, toPhone, templateId, variables, opts) {
         payload: JSON.stringify(payload),
         muteHttpExceptions: true
       });
+      perfAdd_('http', tHttp);
       const code = res.getResponseCode();
       result = (code >= 200 && code < 300 ? '성공' : '실패 ' + code + ' ' + res.getContentText().slice(0, 200)) +
         (mode === 'test' ? ' (test 모드)' : '');
