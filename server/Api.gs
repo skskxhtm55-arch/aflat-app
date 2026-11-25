@@ -18,6 +18,8 @@ function routes_() { return {
   ping:                 { auth: 'none',  fn: function () { return { pong: true, serverTime: fmt_(new Date(), 'yyyy-MM-dd HH:mm:ss') }; } },
   login:                { auth: 'none',  fn: apiLogin_ },
   requestPasswordReset: { auth: 'none',  fn: apiRequestPasswordReset_ },
+  listPosts:            { auth: 'none',  fn: apiListPosts_ },     // 소식은 비회원도 조회 가능
+  getPost:              { auth: 'none',  fn: apiGetPost_ },
 
   // --- 로그인 필요 ---
   logout:               { auth: 'user',  allowTemp: true, fn: apiLogout_ },
@@ -34,7 +36,9 @@ function routes_() { return {
   adminBulkIssue:           { auth: 'admin', fn: apiAdminBulkIssue_ },
   adminUnlock:              { auth: 'admin', fn: apiAdminUnlock_ },
   adminListResetRequests:   { auth: 'admin', fn: apiAdminListResetRequests_ },
-  adminResolveResetRequest: { auth: 'admin', fn: apiAdminResolveResetRequest_ }
+  adminResolveResetRequest: { auth: 'admin', fn: apiAdminResolveResetRequest_ },
+  adminSavePost:            { auth: 'admin', fn: apiAdminSavePost_ },
+  adminDeletePost:          { auth: 'admin', fn: apiAdminDeletePost_ }
 }; }
 
 /** 앱(화면)의 모든 요청이 들어오는 곳 */

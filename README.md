@@ -24,6 +24,7 @@ server/   Apps Script 코드 (clasp 로 업로드)
   MyBookings.gs  내 예약
   Auth.gs        로그인·비밀번호·세션
   Admin.gs       관리자 기능
+  Posts.gs       소식 게시판(홈)
   Alimtalk.gs    솔라피
   Api.gs         앱 요청 입구(기능 목록 ROUTES)
   Config.gs      시트 이름·보안 기준값·운영설정 읽기

@@ -4,7 +4,8 @@
 // 화면은 주소의 # 뒤 이름으로 바뀝니다. (예: #home, #book, #my)
 //   login     로그인               reset     비밀번호 재설정 요청
 //   password  비밀번호 변경        home      홈 (B-1)
-//   book      연습실 예약 (C-2)    my        내 예약 (C-4)
+//   book      연습실 예약 (C-2)    my        내 예약 (C-4·C-5)
+//   posts     소식 전체 (G-1)      post      소식 상세        postEdit  소식 쓰기·수정(원장)
 //   more      더보기               admin     관리(원장 전용)
 // 새 화면을 추가하려면 VIEWS 에 함수를 하나 추가하면 됩니다.
 // =====================================================================
@@ -19,9 +20,11 @@ const S = {
 
 const VIEWS = {
   login: viewLogin, reset: viewReset, password: viewChangePassword,
-  home: viewHome, book: viewBook, my: viewMy, more: viewMore, admin: viewAdmin
+  home: viewHome, posts: viewPosts, post: viewPost, postEdit: viewPostEdit, book: viewBook, my: viewMy, more: viewMore, admin: viewAdmin
 };
-const PUBLIC_VIEWS = ['login', 'reset'];
+const PUBLIC_VIEWS = ['login', 'reset'];            // 로그인하지 않은 사람 전용 (로그인하면 홈으로)
+const OPEN_VIEWS = ['home', 'posts', 'post'];        // 로그인 없이도 볼 수 있는 화면 (소식은 비회원 공개)
+const TAB_OF = { posts: 'home', post: 'home', postEdit: 'home' };   // 하단 탭 표시용
 
 // ---------------------------------------------------------------------
 // 작은 도구들
@@ -136,17 +139,17 @@ function render() {
   const r = parseRoute();
   let name = r.name;
   if (!S.me) {
-    if (PUBLIC_VIEWS.indexOf(name) < 0) return go('login');
+    if (PUBLIC_VIEWS.indexOf(name) < 0 && OPEN_VIEWS.indexOf(name) < 0) return go('login');
   } else {
     if (S.me.mustChangePassword && name !== 'password') return go('password');
     if (PUBLIC_VIEWS.indexOf(name) >= 0 || !VIEWS[name]) return go('home');
-    if (name === 'admin' && !S.me.isAdmin) return go('home');
+    if ((name === 'admin' || name === 'postEdit') && !S.me.isAdmin) return go('home');
   }
   closeModal();
   const showNav = !!S.me && !S.me.mustChangePassword;
   $('#nav').hidden = !showNav;
   $('#navAdmin').hidden = !(S.me && S.me.isAdmin);
-  $$('#nav a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === name); });
+  $$('#nav a').forEach(function (a) { a.classList.toggle('on', a.dataset.tab === (TAB_OF[name] || name)); });
   S.seq++;
   VIEWS[name](r.params, S.seq);
 }
@@ -174,6 +177,7 @@ function viewLogin() {
     '<button class="btn primary" type="submit">로그인</button>' +
     '</form>' +
     '<a class="link" href="#reset">비밀번호를 잊으셨나요?</a>' +
+    '<a class="link" href="#home">로그인 없이 학원 소식 보기</a>' +
     '</div>', { noNav: true });
 
   $('#f').addEventListener('submit', function (ev) {
@@ -318,10 +322,21 @@ function pickDate(params) {
 // 홈 (B-1) — 소식 게시판은 다음 단계에서 추가
 // ---------------------------------------------------------------------
 async function viewHome(params, seq) {
+  const guest = !S.me;
+  const isAdmin = !!(S.me && S.me.isAdmin);
   setView(
-    '<div class="page-head"><h2>♫ AFLAT MUSIC STUDIO ♪</h2><p>' + esc(S.me.displayName || '') + '님, 반가워요!</p></div>' +
-    '<h3 class="section-title">소식</h3><div class="card"><div class="sub">소식 게시판을 준비하고 있어요.</div></div>' +
-    '<h3 class="section-title">내 다음 일정</h3><div id="next"><div class="loading">불러오는 중...</div></div>');
+    '<div class="page-head"><h2>♫ AFLAT MUSIC STUDIO ♪</h2><p>' +
+      (guest ? '에이플랫 뮤직 스튜디오' : esc(S.me.displayName || '') + '님, 반가워요!') + '</p></div>' +
+    '<div class="section-row"><h3 class="section-title">소식</h3>' +
+      (isAdmin ? '<a class="btn small" href="#postEdit">+ 소식 쓰기</a>' : '') + '</div>' +
+    '<div id="posts"><div class="loading">불러오는 중...</div></div>' +
+    (guest
+      ? '<a class="btn primary" href="#login">로그인</a>'
+      : '<h3 class="section-title">내 다음 일정</h3><div id="next"><div class="loading">불러오는 중...</div></div>'),
+    { noNav: guest });
+
+  loadPostList(seq, HOME_POSTS);
+  if (guest) return;
   // 다가오는 일정(연습실 예약 + 레슨) 중 가장 가까운 2건
   try {
     const r = await call('getMyBookings');
@@ -333,6 +348,116 @@ async function viewHome(params, seq) {
   } catch (e) {
     if (!e.handled && !stale(seq)) $('#next').innerHTML = errorBox(e);
   }
+}
+
+// ---------------------------------------------------------------------
+// 소식 (G-1) — 누구나 보기, 원장만 쓰기·수정·삭제. 글과 링크만.
+// ---------------------------------------------------------------------
+const HOME_POSTS = 5;   // 홈에 보여줄 소식 수 (넘으면 '소식 전체 보기')
+
+/** 소식 목록을 #posts 칸에 그립니다. limit 이 있으면 그 수만큼만 */
+async function loadPostList(seq, limit) {
+  try {
+    const list = await call('listPosts');
+    if (stale(seq)) return;
+    const shown = limit ? list.slice(0, limit) : list;
+    $('#posts').innerHTML = '<div class="card">' +
+      (shown.length ? shown.map(function (p) {
+        return '<a class="item post-item" href="#post?id=' + encodeURIComponent(p.id) + '"><div>' +
+          '<div class="main">' + (p.pinned ? '<span class="badge pin">고정</span>' : '') + esc(p.title) + '</div>' +
+          '<div class="sub">' + esc(p.dateText) + '</div></div><span class="chev">›</span></a>';
+      }).join('') : '<div class="sub">아직 소식이 없어요.</div>') + '</div>' +
+      (limit && list.length > limit ? '<a class="link" href="#posts">소식 전체 보기 (' + list.length + '건)</a>' : '');
+  } catch (e) {
+    if (!e.handled && !stale(seq)) $('#posts').innerHTML = errorBox(e);
+  }
+}
+
+function viewPosts(params, seq) {
+  const isAdmin = !!(S.me && S.me.isAdmin);
+  setView(
+    '<div class="page-head"><h2>소식</h2><p>에이플랫 뮤직 스튜디오 소식이에요</p></div>' +
+    (isAdmin ? '<a class="btn small" href="#postEdit">+ 소식 쓰기</a>' : '') +
+    '<div id="posts"><div class="loading">불러오는 중...</div></div>' +
+    '<a class="link" href="#home">← 홈으로</a>',
+    { noNav: !S.me });
+  loadPostList(seq, 0);
+}
+
+/** 글 내용 → 화면: 특수문자는 그대로 보이게 바꾸고, 줄바꿈 유지, http(s) 주소는 누르면 열리는 링크로 */
+function postBodyHtml(text) {
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, function (url) {
+    const tail = url.match(/[.,!?)\]]+$/);                 // 문장 끝 마침표·괄호는 링크에서 제외
+    const clean = tail ? url.slice(0, -tail[0].length) : url;
+    return '<a href="' + clean + '" target="_blank" rel="noopener noreferrer">' + clean + '</a>' + (tail ? tail[0] : '');
+  }).replace(/\n/g, '<br>');
+}
+
+async function viewPost(params, seq) {
+  const id = params.get('id') || '';
+  const isAdmin = !!(S.me && S.me.isAdmin);
+  setView('<div id="post"><div class="loading">불러오는 중...</div></div><a class="link" href="#home">← 홈으로</a>', { noNav: !S.me });
+  try {
+    const p = await call('getPost', { id: id });
+    if (stale(seq)) return;
+    $('#post').innerHTML =
+      '<div class="card post">' +
+      '<h2 class="post-title">' + (p.pinned ? '<span class="badge pin">고정</span>' : '') + esc(p.title) + '</h2>' +
+      '<div class="sub">' + esc(p.dateText) + '</div>' +
+      '<div class="post-body">' + postBodyHtml(p.body) + '</div></div>' +
+      (isAdmin ? '<div class="btn-row"><a class="btn" href="#postEdit?id=' + encodeURIComponent(p.id) + '">수정</a>' +
+                 '<button class="btn danger" id="del" type="button">삭제</button></div>' : '');
+    if (isAdmin) {
+      $('#del').addEventListener('click', function () {
+        if (!confirm('이 소식을 삭제할까요?\n(소식 시트에서 삭제여부를 비우면 되살릴 수 있어요)')) return;
+        withBusy($('#del'), '삭제 중...', async function () {
+          try {
+            await call('adminDeletePost', { id: p.id });
+            toast('삭제했어요.');
+            go('home');
+          } catch (e) { if (!e.handled) toast(e.message); }
+        });
+      });
+    }
+  } catch (e) {
+    if (!e.handled && !stale(seq)) $('#post').innerHTML = errorBox(e);
+  }
+}
+
+async function viewPostEdit(params, seq) {
+  const id = params.get('id') || '';
+  setView(
+    '<div class="page-head"><h2>' + (id ? '소식 수정' : '소식 쓰기') + '</h2><p>글과 링크(https://…)를 쓸 수 있어요</p></div>' +
+    '<form id="f" class="card">' +
+    '<label class="field"><span>제목</span><input class="input" id="title" maxlength="100" required></label>' +
+    '<label class="field"><span>내용</span><textarea class="input" id="body" rows="10" maxlength="5000" required></textarea></label>' +
+    '<label class="check"><input type="checkbox" id="pinned"> 상단 고정 (목록 맨 위에 보이기)</label>' +
+    '<div class="msg err" id="err"></div>' +
+    '<button class="btn primary" type="submit">' + (id ? '수정하기' : '올리기') + '</button>' +
+    '</form>' +
+    '<a class="link" href="' + (id ? '#post?id=' + encodeURIComponent(id) : '#home') + '">취소</a>');
+
+  if (id) {
+    try {
+      const p = await call('getPost', { id: id });
+      if (stale(seq)) return;
+      $('#title').value = p.title; $('#body').value = p.body; $('#pinned').checked = p.pinned;
+    } catch (e) {
+      if (!e.handled && !stale(seq)) $('#err').textContent = e.message;
+      return;
+    }
+  }
+  $('#f').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    $('#err').textContent = '';
+    withBusy($('#f button'), '저장 중...', async function () {
+      try {
+        await call('adminSavePost', { id: id, title: $('#title').value, body: $('#body').value, pinned: $('#pinned').checked });
+        toast(id ? '수정했어요.' : '소식을 올렸어요.');
+        go(id ? 'post?id=' + encodeURIComponent(id) : 'home');
+      } catch (e) { if (!e.handled) $('#err').textContent = e.message; }
+    });
+  });
 }
 
 /**

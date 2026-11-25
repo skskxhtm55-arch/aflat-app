@@ -35,6 +35,10 @@
     settings: { openMin: 480, closeMin: 1440, bookableDays: 7, maxDailyMin: 120, durations: [30, 60, 90, 120], pastGraceMin: 30 },
     today: dates[0], dates: dates
   };
+  const posts = [
+    { id: 'P1', title: '12월 정기공연 안내', body: '12월 20일(토) 오후 3시 정기공연이 열립니다.\n신청은 아래 링크에서 해 주세요.\nhttps://example.com/apply.', pinned: true, dateText: '2026.11.24' },
+    { id: 'P2', title: '연말 휴원 안내 <b>테스트</b>', body: '12월 31일 ~ 1월 1일은 휴원합니다.', pinned: false, dateText: '2026.11.20' }
+  ];
   const resetReqs = [{ requestId: 'R1', loginId: '01000000004', loginIdText: '010-0000-0004', names: '최휴원', requestedAt: '2026-11-19 10:12', note: '' }];
 
   function fail(msg, code) { const e = new ApiError(msg, code || 'ERROR'); throw e; }
@@ -53,6 +57,16 @@
         return me;
       case 'logout': return { done: true };
       case 'changePassword': me.mustChangePassword = false; return { done: true, me: me };
+      case 'listPosts': return posts.map(function (p) { return { id: p.id, title: p.title, pinned: p.pinned, dateText: p.dateText }; });
+      case 'getPost': { const p = posts.filter(function (x) { return x.id === data.id; })[0]; if (!p) fail('삭제되었거나 없는 소식입니다.', 'NOT_FOUND'); return p; }
+      case 'adminSavePost': {
+        if (!data.title || !data.body) fail('제목과 내용을 입력해 주세요.');
+        const p = data.id ? posts.filter(function (x) { return x.id === data.id; })[0] : null;
+        if (p) Object.assign(p, { title: data.title, body: data.body, pinned: data.pinned });
+        else posts.unshift({ id: 'P' + Date.now(), title: data.title, body: data.body, pinned: data.pinned, dateText: '2026.11.25' });
+        return { saved: true };
+      }
+      case 'adminDeletePost': { const k = posts.findIndex(function (x) { return x.id === data.id; }); if (k >= 0) posts.splice(k, 1); return { deleted: true }; }
       case 'requestPasswordReset': return { message: '요청이 접수되었습니다. 학원에서 확인 후 임시 비밀번호를 안내해 드릴게요.' };
       case 'getTimetable': {
         const k = data.date;

@@ -238,3 +238,17 @@ details > summary { cursor: pointer; color: var(--green); font-size: 16px; paddi
 /* 내 예약: 연습/레슨 구분 표시 */
 .badge.practice { background: var(--mint, #D3F7EC); color: var(--green, #035A17); margin: 0 6px 0 0; }
 .badge.lesson { background: var(--coral, #E97A76); color: #fff; margin: 0 6px 0 0; }
+
+/* 소식 */
+.section-row { display: flex; align-items: center; justify-content: space-between; }
+.section-row .section-title { margin-right: auto; }
+.btn.small { width: auto; padding: 6px 12px; font-size: 14px; }
+.post-item { text-decoration: none; color: inherit; align-items: center; }
+.post-item .chev { color: var(--muted); font-size: 22px; }
+.badge.pin { background: var(--green); color: var(--cream); margin: 0 6px 0 0; }
+.post-title { color: var(--green); font-size: 20px; margin: 0 0 6px; font-weight: normal; }
+.post-body { margin-top: 14px; line-height: 1.7; word-break: break-word; overflow-wrap: anywhere; }
+.post-body a { text-decoration: underline; }
+textarea.input { resize: vertical; min-height: 180px; line-height: 1.6; }
+.check { display: flex; align-items: center; gap: 8px; margin: 4px 0 14px; color: var(--green); }
+.btn.danger { border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }

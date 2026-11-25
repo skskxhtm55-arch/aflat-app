@@ -72,6 +72,8 @@ function setupSheets_() {
   setDropdown_(SHEET.MEMBERS, '상태', [STATUS.ACTIVE, STATUS.PAUSED, STATUS.ENDED]);
   setDropdown_(SHEET.ROOMS, '사용가능여부', ['Y', 'N']);
   setDropdown_(SHEET.RESET_REQ, '상태', ['접수', '처리완료', '무시']);
+  setDropdown_(SHEET.POSTS, '상단고정', ['Y', 'N']);
+  setDropdown_(SHEET.POSTS, '삭제여부', ['Y', '']);
 
   // 계정·세션 시트 보호 (수정하려 하면 경고창이 뜸)
   [SHEET.ACCOUNTS, SHEET.SESSIONS].forEach(function (name) {
