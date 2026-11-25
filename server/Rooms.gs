@@ -80,12 +80,19 @@ function loadEventsInRangeFast_(rooms, from, to) {
     return d ? d.getTime() : NaN;
   };
 
+  const warnings = [];
   responses.forEach(function (res, i) {
     const room = rooms[i];
     const code = res.getResponseCode();
-    if (code === 404 || code === 403) {
-      console.error('캘린더를 찾을 수 없음(룸 ' + room.name + ', ' + code + '): ' + room.calendarId);
-      missing.push(room.id);
+    if (code === 404 || code === 403 || code === 401) {
+      // 거절되면(권한·API 꺼짐 등) "비어 있음"으로 보지 않고, 이 룸은 예전 방식으로 다시 읽음.
+      // 캘린더가 정말 없으면 예전 방식이 '못 찾음'으로 판단합니다.
+      const why = '룸 ' + room.name + ' 빠른 읽기 거절(' + code + '): ' + res.getContentText().slice(0, 300);
+      console.warn(why);
+      warnings.push(why);
+      const one = loadEventsInRangeLegacy_([room], from, to);
+      Array.prototype.push.apply(events, one.events);
+      Array.prototype.push.apply(missing, one.missing);
       return;
     }
     if (code !== 200) {
@@ -107,7 +114,10 @@ function loadEventsInRangeFast_(rooms, from, to) {
       events.push({ id: it.iCalUID, roomId: room.id, roomName: room.name, start: start, end: end, title: it.summary || '' });
     });
   });
-  return { events: events, missing: missing };
+  // warnings 는 비교 메뉴에서만 보여줌 (서버 캐시에 저장되는 결과에는 넣지 않음)
+  const result = { events: events, missing: missing };
+  Object.defineProperty(result, 'warnings', { value: warnings, enumerable: false });
+  return result;
 }
 
 /** 예전 방식: CalendarApp 으로 캘린더를 하나씩 읽기 (되돌리기·비교용) */

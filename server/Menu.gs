@@ -177,11 +177,16 @@ function menuCompareCalendarRead() {
     const onlyA = ka.filter(function (k) { return kb.indexOf(k) < 0; });
     const onlyB = kb.filter(function (k) { return ka.indexOf(k) < 0; });
     const same = !onlyA.length && !onlyB.length && a.missing.join() === b.missing.join();
+    const warnings = a.warnings || [];
     alert_('캘린더 읽기 비교 (오늘부터 7일, 룸 ' + rooms.length + '개)\n\n' +
       '빠른 방식: 일정 ' + a.events.length + '건, ' + fastMs + 'ms\n' +
       '예전 방식: 일정 ' + b.events.length + '건, ' + legacyMs + 'ms\n\n' +
       (same ? '✅ 결과가 같습니다.'
             : '⚠ 결과가 다릅니다. 스크립트 속성 CAL_READ_MODE = legacy 를 넣고 알려 주세요.\n' +
-              '빠른 방식에만: ' + onlyA.slice(0, 3).join(' / ') + '\n예전 방식에만: ' + onlyB.slice(0, 3).join(' / ')));
+              '빠른 방식에만: ' + onlyA.slice(0, 3).join(' / ') + '\n예전 방식에만: ' + onlyB.slice(0, 3).join(' / ')) +
+      (warnings.length
+        ? '\n\n※ 빠른 읽기가 거절되어 ' + warnings.length + '개 룸을 예전 방식으로 대신 읽었습니다(결과는 안전, 속도 개선 없음):\n' +
+          warnings.slice(0, 2).join('\n')
+        : '\n\n빠른 읽기 거절 없음'));
   });
 }
