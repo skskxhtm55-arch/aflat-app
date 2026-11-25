@@ -191,7 +191,7 @@ function buildMe_(ctx) {
     }),
     settings: {
       openMin: st.openMin, closeMin: st.closeMin, bookableDays: st.bookableDays,
-      maxDailyMin: st.maxDailyMin, durations: st.durations
+      maxDailyMin: st.maxDailyMin, durations: st.durations, pastGraceMin: st.pastGraceMin
     },
     today: todayKey_(),
     dates: bookableDates_(st)

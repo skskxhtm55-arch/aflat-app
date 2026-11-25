@@ -56,6 +56,15 @@ function setupSheets_() {
     settings.getRange(2, 1, DEFAULT_SETTINGS.length, 3).setNumberFormat('@').setValues(DEFAULT_SETTINGS);
     settings.setColumnWidth(3, 520);
     report.push('운영설정 기본값 입력');
+  } else {
+    // 새로 생긴 항목만 맨 아래에 추가 (이미 있는 항목의 값은 건드리지 않음)
+    const haveKeys = settings.getRange(2, 1, settings.getLastRow() - 1, 1).getValues()
+      .map(function (r) { return String(r[0]).trim(); });
+    const missing = DEFAULT_SETTINGS.filter(function (row) { return haveKeys.indexOf(row[0]) < 0; });
+    if (missing.length) {
+      settings.getRange(settings.getLastRow() + 1, 1, missing.length, 3).setNumberFormat('@').setValues(missing);
+      report.push('운영설정 새 항목 추가: ' + missing.map(function (r) { return r[0]; }).join(', '));
+    }
   }
 
   // 드롭다운(데이터 확인) 설정

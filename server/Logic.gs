@@ -187,7 +187,11 @@ function checkBookingTiming_(p) {
   if (st.durations.indexOf(p.duration) < 0) return '선택할 수 없는 이용 시간입니다';
   if (isNaN(p.startMin)) return '시작 시각을 확인해 주세요';
   if (p.dateKey < p.todayKey) return '과거 시간 예약 불가';
-  if (p.dateKey === p.todayKey && p.startMin < p.nowMin) return '과거 시간 예약 불가';
+  // 오늘 예약: 현재 시각에서 '지난시각허용분'만큼 이전 시각까지는 허용 (예: 30 → 15:20에 14:50 시작 가능)
+  const grace = st.pastGraceMin || 0;
+  if (p.dateKey === p.todayKey && p.startMin < p.nowMin - grace) {
+    return grace > 0 ? '지난 시각 예약 불가 (현재 시각 ' + grace + '분 전까지만 가능)' : '과거 시간 예약 불가';
+  }
   if (p.dates.indexOf(p.dateKey) < 0) return '현재로부터 ' + st.bookableDays + '일 이후 날짜 예약 불가';
   if (p.startMin < st.openMin || p.startMin + p.duration > st.closeMin) return '연습실 운영시간 외 예약 불가';
   return '';

@@ -86,6 +86,7 @@ const DEFAULT_SETTINGS = [
   ['최소분할분', '30', '2개 룸으로 나눌 때 각 구간의 최소 길이(분)'],
   ['분할단위', '15', '2개 룸으로 나눌 때 나누는 지점의 간격(분). 시작 시각 기준'],
   ['분할가능최소이용분', '60', '이용 시간이 이 값 이상일 때만 2개 룸 분할 시도'],
+  ['지난시각허용분', '30', '오늘 예약에서, 현재 시각보다 이 분(分)만큼 이전에 시작하는 시각까지 예약 허용 (0 = 지난 시각 예약 불가)'],
   ['시간표캐시초', '60', '시간표를 잠시 기억하는 시간(초). 캘린더 직접 수정은 최대 이 시간만큼 늦게 보임. 0이면 사용 안 함']
 ];
 
@@ -118,6 +119,7 @@ function getSettings_() {
     minSegmentMin: parseInt(raw['최소분할분'], 10),
     splitStepMin: parseInt(raw['분할단위'], 10),
     splitMinDuration: parseInt(raw['분할가능최소이용분'], 10),
+    pastGraceMin: parseInt(raw['지난시각허용분'], 10),
     timetableCacheSec: parseInt(raw['시간표캐시초'], 10)
   };
 
@@ -131,6 +133,7 @@ function getSettings_() {
   if (!(st.minSegmentMin > 0)) problems.push('최소분할분');
   if (!(st.splitStepMin > 0)) problems.push('분할단위');
   if (!(st.splitMinDuration > 0)) problems.push('분할가능최소이용분');
+  if (isNaN(st.pastGraceMin) || st.pastGraceMin < 0) problems.push('지난시각허용분');
   if (isNaN(st.timetableCacheSec) || st.timetableCacheSec < 0) st.timetableCacheSec = 0;
   if (problems.length) {
     fail_('운영설정 값이 올바르지 않습니다: ' + problems.join(', ') + '. 학원에 문의해 주세요.', 'CONFIG');

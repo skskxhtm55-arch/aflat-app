@@ -32,7 +32,7 @@
       { memberId: 'M0002', name: '김테스트', role: '수강생', status: '활성', studentNo: 'TST001', instruments: ['피아노', '보컬'], canBook: true, cannotBookReason: '' },
       { memberId: 'M0009', name: '김동생', role: '수강생', status: '휴원', studentNo: 'TST009', instruments: ['드럼'], canBook: false, cannotBookReason: '휴원 상태에서는 예약할 수 없습니다.' }
     ],
-    settings: { openMin: 480, closeMin: 1440, bookableDays: 7, maxDailyMin: 120, durations: [30, 60, 90, 120] },
+    settings: { openMin: 480, closeMin: 1440, bookableDays: 7, maxDailyMin: 120, durations: [30, 60, 90, 120], pastGraceMin: 30 },
     today: dates[0], dates: dates
   };
   const resetReqs = [{ requestId: 'R1', loginId: '01000000004', loginIdText: '010-0000-0004', names: '최휴원', requestedAt: '2026-11-19 10:12', note: '' }];

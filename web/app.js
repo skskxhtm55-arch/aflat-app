@@ -1,9 +1,9 @@
 // =====================================================================
 // [app.js] 화면 로직
 // ---------------------------------------------------------------------
-// 화면은 주소의 # 뒤 이름으로 바뀝니다. (예: #timetable, #book, #my)
+// 화면은 주소의 # 뒤 이름으로 바뀝니다. (예: #home, #book, #my)
 //   login     로그인               reset     비밀번호 재설정 요청
-//   password  비밀번호 변경        timetable 연습실 시간표 (C-1)
+//   password  비밀번호 변경        home      홈 (B-1)
 //   book      연습실 예약 (C-2)    my        내 예약 (C-4)
 //   more      더보기               admin     관리(원장 전용)
 // 새 화면을 추가하려면 VIEWS 에 함수를 하나 추가하면 됩니다.
@@ -19,7 +19,7 @@ const S = {
 
 const VIEWS = {
   login: viewLogin, reset: viewReset, password: viewChangePassword,
-  timetable: viewTimetable, book: viewBook, my: viewMy, more: viewMore, admin: viewAdmin
+  home: viewHome, book: viewBook, my: viewMy, more: viewMore, admin: viewAdmin
 };
 const PUBLIC_VIEWS = ['login', 'reset'];
 
@@ -139,8 +139,8 @@ function render() {
     if (PUBLIC_VIEWS.indexOf(name) < 0) return go('login');
   } else {
     if (S.me.mustChangePassword && name !== 'password') return go('password');
-    if (PUBLIC_VIEWS.indexOf(name) >= 0 || !VIEWS[name]) return go('timetable');
-    if (name === 'admin' && !S.me.isAdmin) return go('timetable');
+    if (PUBLIC_VIEWS.indexOf(name) >= 0 || !VIEWS[name]) return go('home');
+    if (name === 'admin' && !S.me.isAdmin) return go('home');
   }
   closeModal();
   const showNav = !!S.me && !S.me.mustChangePassword;
@@ -187,7 +187,7 @@ function viewLogin() {
         });
         Api.setToken(r.token);
         S.me = r.me;
-        go(r.me.mustChangePassword ? 'password' : 'timetable');
+        go(r.me.mustChangePassword ? 'password' : 'home');
       } catch (e) {
         $('#err').textContent = e.message;
       }
@@ -264,7 +264,7 @@ function viewChangePassword() {
         const r = await call('changePassword', { currentPassword: $('#cur').value, newPassword: n1 });
         S.me = r.me;
         toast('비밀번호를 변경했습니다.');
-        go('timetable');
+        go('home');
       } catch (e) {
         if (!e.handled) err.textContent = e.message;
       }
@@ -314,16 +314,29 @@ function pickDate(params) {
   return d;
 }
 
-function viewTimetable(params, seq) {
-  const date = pickDate(params);
+// ---------------------------------------------------------------------
+// 홈 (B-1) — 소식 게시판은 다음 단계에서 추가
+// ---------------------------------------------------------------------
+function viewHome() {
   const canBook = S.me.students.some(function (s) { return s.canBook; });
-  const reason = (S.me.students[0] || {}).cannotBookReason || '예약할 수 없는 계정입니다.';
   setView(
-    '<div class="page-head"><h2>♫ AFLAT 연습실 현황 ♪</h2><p>빈자리를 확인하고 예약해 보세요! *_*♬</p></div>' +
+    '<div class="page-head"><h2>♫ AFLAT MUSIC STUDIO ♪</h2><p>' + esc(S.me.displayName || '') + '님, 반가워요!</p></div>' +
+    '<div class="card"><h3 class="section-title">소식</h3><div class="msg info">소식 게시판을 준비하고 있어요.</div></div>' +
+    '<div class="btn-row">' + (canBook ? '<a class="btn primary" href="#book">연습실 예약하기</a>' : '') +
+    '<a class="btn" href="#my">내 예약 보기</a></div>');
+}
+
+/**
+ * 예약할 수 없는 계정(휴원·원장 등)의 예약하기 탭: 이유를 안내하고 시간표만 보여줍니다.
+ * (시간표 탭이 없어졌으므로 이 계정들도 여기서 연습실 현황을 볼 수 있어야 합니다)
+ */
+function viewTimetableOnly(params, seq, reasonsHtml) {
+  const date = pickDate(params);
+  setView(
+    '<div class="page-head"><h2>♫ AFLAT 연습실 현황 ♪</h2><p>빈자리를 확인할 수 있어요</p></div>' +
+    '<div class="msg err">' + reasonsHtml + '</div>' +
     dateChipsHtml(S.me.dates, date) +
-    '<div id="tt"></div>' +
-    // 예약은 하단 '예약하기' 탭으로 합니다. 예약할 수 없는 계정만 그 이유를 안내합니다.
-    (canBook ? '' : '<div class="floating-btn off">' + esc(reason) + '</div>'));
+    '<div id="tt"></div>');
 
   const load = async function (d) {
     S.ttDate = d;
@@ -333,7 +346,7 @@ function viewTimetable(params, seq) {
       const tt = await call('getTimetable', { date: d });
       if (stale(seq) || S.ttDate !== d) return;
       S.me.dates = tt.dates;
-      $('#tt').innerHTML = timetableHtml(tt);
+      $('#tt').innerHTML = timetableHtml(tt, null, true);
     } catch (e) {
       if (!e.handled && !stale(seq)) $('#tt').innerHTML = errorBox(e);
     }
@@ -352,7 +365,7 @@ function viewBook(params, seq) {
   const students = S.me.students.filter(function (s) { return s.canBook; });
   if (!students.length) {
     const reasons = S.me.students.map(function (s) { return esc(s.name) + ': ' + esc(s.cannotBookReason); }).join('<br>');
-    setView('<div class="page-head"><h2>연습실 예약</h2></div><div class="msg err">' + (reasons || '예약할 수 없는 계정입니다.') + '</div>');
+    viewTimetableOnly(params, seq, reasons || '예약할 수 없는 계정입니다.');
     return;
   }
   const st = S.me.settings;
@@ -422,7 +435,11 @@ function viewBook(params, seq) {
 
     let err = '';
     if (!isNaN(startMin)) {
-      if (f.date === now.date && startMin < now.min) err = '이미 지난 시각이에요.';
+      // 오늘은 현재 시각에서 '지난시각허용분'(운영설정)만큼 이전 시각까지 예약 가능
+      const grace = st.pastGraceMin || 0;
+      if (f.date === now.date && startMin < now.min - grace) {
+        err = grace > 0 ? '현재 시각 ' + grace + '분 전까지만 예약할 수 있어요.' : '이미 지난 시각이에요.';
+      }
       else if (startMin < st.openMin || startMin >= st.closeMin) err = '운영시간(' + minToHHMM(st.openMin) + '~' + minToHHMM(st.closeMin) + ') 안에서 선택해 주세요.';
     }
     if (tt && remaining < Math.min.apply(null, st.durations)) err = '이 날은 하루 예약 한도(' + st.maxDailyMin + '분)를 모두 사용했어요.';
@@ -521,7 +538,7 @@ function showBookingDone(r) {
     '</dl>' +
     (r.segments.length > 1 ? '<div class="msg info">빈 룸이 없어 중간에 룸을 한 번 옮기도록 배정했어요.</div>' : '') +
     '</div>' +
-    '<div class="btn-row"><a class="btn" href="#my">내 예약 보기</a><a class="btn" href="#timetable">시간표로</a></div>');
+    '<div class="btn-row"><a class="btn" href="#my">내 예약 보기</a><a class="btn" href="#home">홈으로</a></div>');
 }
 
 // ---------------------------------------------------------------------

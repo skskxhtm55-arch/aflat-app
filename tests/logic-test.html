@@ -101,6 +101,13 @@
     eq('운영 시작 전', timing('2026-11-21', '07:59', 30), '연습실 운영시간 외 예약 불가');
     eq('24:00 종료 허용', timing('2026-11-21', '23:00', 60), '');
     eq('자정 넘김 불가', timing('2026-11-21', '23:31', 30), '연습실 운영시간 외 예약 불가');
+    const SETG = Object.assign({}, SET, { pastGraceMin: 30 });
+    const timingG = function (start, nowMin) {
+      return checkBookingTiming_({ dateKey: '2026-11-20', startMin: parseHHMM_(start), duration: 60, todayKey: '2026-11-20', nowMin: nowMin, dates: DATES, settings: SETG });
+    };
+    eq('지난시각허용 30분: 30분 전 허용', timingG('14:50', 920), '');
+    eq('지난시각허용 30분: 31분 전 불가', timingG('14:49', 920), '지난 시각 예약 불가 (현재 시각 30분 전까지만 가능)');
+    eq('지난시각허용 30분: 어제 날짜는 여전히 불가', checkBookingTiming_({ dateKey: '2026-11-19', startMin: 1430, duration: 30, todayKey: '2026-11-20', nowMin: 5, dates: DATES, settings: SETG }), '과거 시간 예약 불가');
     eq('선택지 밖 이용시간', timing('2026-11-21', '10:00', 45), '선택할 수 없는 이용 시간입니다');
 
     // --- 분할 예약 묶기 ---
