@@ -101,6 +101,12 @@
     eq('내 일정: 레슨 포함', mine.filter(function (x) { return x.type === '레슨'; }).length, 1);
     eq('내 일정: 분할 연습은 1건으로', groupSplitBookings_(mine).length, 2);
     eq('내 일정: 레슨 룸은 실제 캘린더 룸', mine[0].roomName, 'Bb');
+    // --- 변경·취소 가능 시한 ---
+    const END = 1000 * 60000;
+    eq('변경 가능: 끝나기 1분 전', canChangeBooking_(END, END - 60000, 0), true);
+    eq('변경 불가: 끝나는 시각', canChangeBooking_(END, END, 0), false);
+    eq('변경 불가: 마감 30분 설정 시 끝나기 10분 전', canChangeBooking_(END, END - 600000, 30), false);
+    eq('변경 가능: 마감 30분 설정 시 끝나기 31분 전', canChangeBooking_(END, END - 31 * 60000, 30), true);
 
 
     const SET = { durations: [30, 60, 90, 120], openMin: 480, closeMin: 1440, bookableDays: 7 };

@@ -14,6 +14,7 @@
 const S = {
   me: null,          // 로그인한 사람 정보 (서버 getMe 결과)
   ttDate: null,      // 마지막으로 본 날짜
+  editing: null,     // 변경 중인 연습실 예약 (내 예약에서 '변경하기'를 누르면 채워짐)
   seq: 0,            // 화면 전환 번호 (늦게 도착한 응답이 다른 화면을 덮어쓰지 않게)
   installPrompt: null
 };
@@ -496,7 +497,18 @@ function viewTimetableOnly(params, seq, reasonsHtml) {
 // 연습실 예약 (C-2)
 // ---------------------------------------------------------------------
 function viewBook(params, seq) {
-  const students = S.me.students.filter(function (s) { return s.canBook; });
+  // 변경 모드: 내 예약에서 '변경하기'로 들어온 경우 (#book?edit=1)
+  const edit = params.get('edit') && S.editing ? S.editing : null;
+  if (!edit) S.editing = null;
+  let students = S.me.students.filter(function (s) { return s.canBook; });
+  if (edit) {
+    students = students.filter(function (s) { return s.studentNo === edit.studentNo; });
+    if (!students.length) {
+      setView('<div class="page-head"><h2>예약 변경</h2></div><div class="msg err">지금은 이 수강생의 예약을 변경할 수 없어요. 취소만 가능해요.</div>' +
+        '<a class="link" href="#my">← 내 예약으로</a>');
+      return;
+    }
+  }
   if (!students.length) {
     const reasons = S.me.students.map(function (s) { return esc(s.name) + ': ' + esc(s.cannotBookReason); }).join('<br>');
     viewTimetableOnly(params, seq, reasons || '예약할 수 없는 계정입니다.');
@@ -510,11 +522,20 @@ function viewBook(params, seq) {
     start: '',
     duration: 0
   };
+  if (edit) {   // 기존 예약 내용으로 미리 채우기
+    if (students[0].instruments.indexOf(edit.instrument) >= 0) f.instrument = edit.instrument;
+    if (S.me.dates.indexOf(edit.date) >= 0) { f.date = edit.date; S.ttDate = edit.date; }
+    f.start = edit.start;
+    if (st.durations.indexOf(edit.duration) >= 0) f.duration = edit.duration;
+  }
   let tt = null;   // 선택한 날짜의 시간표 + 내 사용량
   let submitErr = '';   // 서버가 예약을 거절한 사유. 선택을 바꾸기 전까지 계속 보여줌
 
   setView(
-    '<div class="page-head"><h2>연습실 예약</h2><p>룸은 자동으로 배정돼요</p></div>' +
+    (edit
+      ? '<div class="page-head"><h2>예약 변경</h2><p>새 조건으로 다시 배정해요. 실패하면 기존 예약은 그대로예요</p></div>' +
+        '<div class="msg info">변경 전: ' + esc(edit.dateText + ' ' + edit.timeText + ' ' + roomLabel(edit.roomText)) + '</div>'
+      : '<div class="page-head"><h2>연습실 예약</h2><p>룸은 자동으로 배정돼요</p></div>') +
     '<form id="f" class="card">' +
     (students.length > 1
       ? '<div class="field"><span>수강생</span><div class="chips wrap" id="stuChips">' + students.map(function (s, i) {
@@ -529,9 +550,11 @@ function viewBook(params, seq) {
     '<div class="msg info" id="usage"></div>' +
     '<div class="msg info" id="summary"></div>' +
     '<div class="msg err" id="err"></div>' +
-    '<button class="btn primary" id="submit" type="submit" disabled>예약하기</button>' +
+    '<button class="btn primary" id="submit" type="submit" disabled>' + (edit ? '이대로 변경하기' : '예약하기') + '</button>' +
     '</form>' +
+    (edit ? '<a class="link" href="#my">변경하지 않고 돌아가기</a>' : '') +
     '<h3 class="section-title">이 날의 연습실 현황</h3><div id="tt"></div>');
+  if (edit) $('#start').value = f.start;
 
   function fillInstruments() {
     const sel = $('#inst');
@@ -544,7 +567,10 @@ function viewBook(params, seq) {
   function usedMin() {
     if (!tt) return 0;
     const u = tt.myUsage.filter(function (x) { return x.studentNo === f.student.studentNo; })[0];
-    return u ? u.usedMin : 0;
+    let used = u ? u.usedMin : 0;
+    // 변경 중이면 기존 예약 시간은 빼고 계산 (서버도 기존 예약은 없는 것으로 보고 검사)
+    if (edit && f.date === edit.date && f.student.studentNo === edit.studentNo) used = Math.max(0, used - edit.duration);
+    return used;
   }
 
   /** 선택 상태를 검사해 버튼·안내를 갱신 (불가능한 선택은 미리 막기) */
@@ -636,20 +662,23 @@ function viewBook(params, seq) {
     ev.preventDefault();
     const startMin = hhmmToMin(f.start);
     const text = f.student.name + ' · ' + f.instrument + '\n' + dateLabel(f.date) + ' ' + minToHHMM(startMin) + '~' +
-      minToHHMM(startMin + f.duration) + ' (' + f.duration + '분)\n\n이대로 예약할까요?';
+      minToHHMM(startMin + f.duration) + ' (' + f.duration + '분)\n\n' + (edit ? '이대로 변경할까요?' : '이대로 예약할까요?');
     if (!confirm(text)) return;
-    withBusy($('#submit'), '예약 중... (몇 초 걸려요)', async function () {
+    withBusy($('#submit'), (edit ? '변경 중' : '예약 중') + '... (몇 초 걸려요)', async function () {
       try {
-        const r = await call('createBooking', {
+        const req = {
           studentNo: f.student.studentNo, instrument: f.instrument, date: f.date,
           start: minToHHMM(startMin), duration: f.duration
-        });
+        };
+        if (edit) req.ref = edit.ref;
+        const r = await call(edit ? 'modifyBooking' : 'createBooking', req);
         if (stale(seq)) return;
+        S.editing = null;
         showBookingDone(r);
       } catch (e) {
         if (e.handled || stale(seq)) return;
         // 시간표를 다시 불러오면 안내 칸이 새로 그려지므로, 사유를 따로 보관해 두고 계속 보여줍니다.
-        submitErr = '예약하지 못했어요: ' + e.message;
+        submitErr = (edit ? '변경하지 못했어요(기존 예약은 그대로예요): ' : '예약하지 못했어요: ') + e.message;
         toast(submitErr);
         loadDay();   // 그 사이 바뀐 현황 다시 보여주기
       }
@@ -661,7 +690,8 @@ function viewBook(params, seq) {
 
 function showBookingDone(r) {
   setView(
-    '<div class="page-head"><h2>예약이 확정되었어요! 🎉</h2><p>확정 알림톡도 보내드려요</p></div>' +
+    '<div class="page-head"><h2>' + (r.changed ? '예약이 변경되었어요! 🎉' : '예약이 확정되었어요! 🎉') + '</h2><p>확정 알림톡도 보내드려요</p></div>' +
+    (r.changed && r.oldText ? '<div class="msg info">변경 전: ' + esc(r.oldText) + '</div>' : '') +
     '<div class="card"><dl class="kv">' +
     '<dt>수강생</dt><dd>' + esc(r.studentName) + '</dd>' +
     '<dt>악기</dt><dd>' + esc(r.instrument) + '</dd>' +
@@ -678,6 +708,37 @@ function showBookingDone(r) {
 // ---------------------------------------------------------------------
 // 내 예약 (C-4)
 // ---------------------------------------------------------------------
+/** 내 예약에서 연습실 예약을 눌렀을 때: 변경하기 / 예약 취소 */
+function openBookingActions(b, showName, onDone) {
+  const m = showModal(
+    '<h3>연습실 예약</h3>' +
+    '<div class="card">' + bookingRowHtml(b, showName) + '</div>' +
+    '<div class="sub">예약이 끝나기 전까지 변경·취소할 수 있어요.</div>' +
+    '<div class="btn-col">' +
+    '<button class="btn primary" id="mEdit" type="button">변경하기</button>' +
+    '<button class="btn danger" id="mCancel" type="button">예약 취소</button>' +
+    '<button class="btn" id="mClose" type="button">닫기</button></div>');
+  $('#mClose', m).addEventListener('click', closeModal);
+  $('#mEdit', m).addEventListener('click', function () {
+    S.editing = b;
+    closeModal();
+    go('book?edit=1');
+  });
+  $('#mCancel', m).addEventListener('click', function () {
+    if (!confirm(b.dateText + ' ' + b.timeText + ' 연습실 예약을 취소할까요?\n취소하면 되돌릴 수 없어요.')) return;
+    withBusy($('#mCancel', m), '취소 중...', async function () {
+      try {
+        await call('cancelBooking', { ref: b.ref });
+        closeModal();
+        toast('예약을 취소했어요.');
+        onDone();
+      } catch (e) {
+        if (!e.handled) toast(e.message);
+      }
+    });
+  });
+}
+
 /** 내 예약 한 줄 (홈 '내 다음 일정'과 '내 예약' 탭에서 함께 사용) */
 function bookingRowHtml(b, showName) {
   const lesson = b.type === '레슨';
@@ -690,14 +751,24 @@ function bookingRowHtml(b, showName) {
 }
 
 async function viewMy(params, seq) {
-  setView('<div class="page-head"><h2>내 예약</h2><p>연습실 예약과 레슨 일정이에요 · 예약 취소·변경은 학원에 직접 연락해 주세요</p></div><div id="list"><div class="loading">불러오는 중...</div></div>');
+  setView('<div class="page-head"><h2>내 예약</h2><p>연습실 예약을 누르면 변경·취소할 수 있어요 · 레슨 변경은 학원에 문의해 주세요</p></div><div id="list"><div class="loading">불러오는 중...</div></div>');
   try {
     const r = await call('getMyBookings');
     if (stale(seq)) return;
     const row = function (b) { return bookingRowHtml(b, r.multipleStudents); };
+    // 변경·취소 가능한 연습실 예약은 누를 수 있게
+    const upRow = function (b, i) {
+      return b.canChange
+        ? '<button type="button" class="item-btn" data-i="' + i + '">' + row(b).replace('</div></div></div>', '</div></div><span class="chev">›</span></div>') + '</button>'
+        : row(b);
+    };
     $('#list').innerHTML =
-      '<div class="card">' + (r.upcoming.length ? r.upcoming.map(row).join('') : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>' +
+      '<div class="card">' + (r.upcoming.length ? r.upcoming.map(upRow).join('') : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>' +
       (r.past.length ? '<details><summary>지난 일정 (최근 30일, ' + r.past.length + '건)</summary><div class="card">' + r.past.map(row).join('') + '</div></details>' : '');
+    $('#list').addEventListener('click', function (ev) {
+      const btn = ev.target.closest('.item-btn');
+      if (btn) openBookingActions(r.upcoming[Number(btn.dataset.i)], r.multipleStudents, function () { viewMy(params, S.seq); });
+    });
   } catch (e) {
     if (!e.handled && !stale(seq)) $('#list').innerHTML = errorBox(e);
   }

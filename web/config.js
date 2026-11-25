@@ -11,7 +11,7 @@ window.AFLAT_CONFIG = {
   TEST_API_URL: 'https://script.google.com/macros/s/AKfycbyaxVK5QPvz2poymrErYTTt6ZBJIvKF9o3tOxoLib_lyEc7xr7LLEOG2YHvfCm3zyeD/exec',
 
   // 앱 버전 (더보기 화면에 표시. 수정할 때마다 올리면 문의 대응이 쉬움)
-  VERSION: '1.3.0'
+  VERSION: '1.4.0'
 };
 
 if (/[?&]test=1/.test(location.search) && window.AFLAT_CONFIG.TEST_API_URL) {

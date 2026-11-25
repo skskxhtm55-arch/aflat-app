@@ -27,6 +27,8 @@ function routes_() { return {
   changePassword:       { auth: 'user',  allowTemp: true, fn: apiChangePassword_ },
   getTimetable:         { auth: 'user',  fn: apiGetTimetable_ },
   createBooking:        { auth: 'user',  fn: apiCreateBooking_ },
+  modifyBooking:        { auth: 'user',  fn: apiModifyBooking_ },
+  cancelBooking:        { auth: 'user',  fn: apiCancelBooking_ },
   getMyBookings:        { auth: 'user',  fn: apiGetMyBookings_ },
 
   // --- 원장(관리자) 전용 ---

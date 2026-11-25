@@ -51,6 +51,7 @@ function loadEventsInRange_(rooms, from, to) {
     }
     cal.getEvents(from, to).forEach(function (ev) {
       events.push({
+        id: ev.getId(),          // 일정 ID (예약 변경·취소 때 본인 일정을 다시 찾는 데 사용)
         roomId: room.id,
         roomName: room.name,
         start: ev.getStartTime().getTime(),

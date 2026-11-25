@@ -91,12 +91,19 @@
         return {
           upcoming: [
             { type: '레슨', dateText: '11월 20일 (금)', timeText: '14:00~15:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false },
-            { type: '연습', dateText: '11월 20일 (금)', timeText: '19:00~20:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false },
-            { type: '연습', dateText: '11월 22일 (일)', timeText: '18:00~20:00', roomText: 'Eb(18:00~19:00) → Bb(19:00~20:00)', instrument: '피아노', studentName: '김테스트', isSplit: true }
+            { type: '연습', dateText: '11월 20일 (금)', timeText: '19:00~20:00', roomText: 'Bb', instrument: '피아노', studentName: '김테스트', isSplit: false, canChange: true, ref: [{ r: 'R2', e: 'ev1' }], studentNo: 'TST001', date: dates[1], start: '19:00', duration: 60 },
+            { type: '연습', canChange: true, ref: [{ r: 'R1', e: 'ev2' }, { r: 'R2', e: 'ev3' }], studentNo: 'TST001', date: dates[3], start: '18:00', duration: 120, dateText: '11월 22일 (일)', timeText: '18:00~20:00', roomText: 'Eb(18:00~19:00) → Bb(19:00~20:00)', instrument: '피아노', studentName: '김테스트', isSplit: true }
           ],
           past: [{ type: '연습', dateText: '11월 15일 (일)', timeText: '10:00~11:00', roomText: 'Db', instrument: '보컬', studentName: '김테스트', isSplit: false }],
           multipleStudents: true
         };
+      case 'cancelBooking': if (!data.ref) fail('취소할 예약을 다시 선택해 주세요.'); return { cancelled: true };
+      case 'modifyBooking': {
+        if (!data.ref) fail('변경할 예약을 다시 선택해 주세요.');
+        if (data.start === '03:00') fail('해당 시간 잔여 연습실 없음', 'BOOKING');
+        return { changed: true, oldText: '11월 20일 (금) 19:00~20:00 Bb', studentName: '김테스트', instrument: data.instrument, dateText: data.date,
+                 bookingText: data.start + ' Eb', segments: [{ room: 'Eb', start: data.start, end: '--:--' }] };
+      }
       case 'adminListMembers':
         return [
           { loginId: '01000000000', loginIdText: '010-0000-0000', validLoginId: true, hasAccount: true, isTemp: false, tempExpired: false, lockedUntil: '', lastLogin: '2026-11-19 09:00',

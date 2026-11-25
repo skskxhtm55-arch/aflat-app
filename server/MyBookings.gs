@@ -31,8 +31,15 @@ function apiGetMyBookings_(ctx) {
 
   const list = groupSplitBookings_(items).map(function (b) {
     const d = new Date(b.start);
+    const practice = b.type === '연습';
     return {
       type: b.type,                     // '연습' 또는 '레슨'
+      // 연습실 예약만: 변경·취소용 표시(룸ID·일정ID)와 가능 여부, 변경 화면에 미리 채울 값
+      ref: practice ? b.segments.map(function (s) { return { r: s.roomId, e: s.id }; }) : null,
+      canChange: practice && canChangeBooking_(b.end, now, st.changeDeadlineMin),
+      studentNo: b.studentNo,
+      start: hhmm(b.start),
+      duration: Math.round((b.end - b.start) / 60000),
       date: fmt_(d, 'yyyy-MM-dd'),
       dateText: fmt_(d, 'M월 d일') + ' (' + days[d.getDay()] + ')',
       timeText: hhmm(b.start) + '~' + endText(b.end),

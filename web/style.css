@@ -252,3 +252,11 @@ details > summary { cursor: pointer; color: var(--green); font-size: 16px; paddi
 textarea.input { resize: vertical; min-height: 180px; line-height: 1.6; }
 .check { display: flex; align-items: center; gap: 8px; margin: 4px 0 14px; color: var(--green); }
 .btn.danger { border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }
+
+/* 내 예약: 누를 수 있는 연습실 예약 */
+.item-btn { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.item-btn .item { align-items: center; }
+.item-btn .chev { color: var(--muted); font-size: 22px; }
+.btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.btn-col .btn { width: 100%; }
+.item-btn + .item-btn .item, .item + .item-btn .item, .item-btn + .item { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 12px; }

@@ -198,6 +198,14 @@ function checkBookingTiming_(p) {
 }
 
 /**
+ * 연습실 예약을 지금 변경·취소할 수 있는지.
+ * 예약이 끝나는 시각(endMs)에서 deadlineMin 분을 뺀 시각 전까지 가능 (0 = 끝나는 시각 전까지)
+ */
+function canChangeBooking_(endMs, nowMs, deadlineMin) {
+  return nowMs < endMs - (deadlineMin || 0) * 60000;
+}
+
+/**
  * 캘린더 일정 중 "내 일정"만 고릅니다. (기능 C-4·C-5)
  * - "(연습)"·"(레슨)" 일정 중 수강생 번호가 정확히 일치하는 것만 (PAM004 ≠ PAM0041)
  * - 제목 규칙을 벗어난 일정(강사 개인연습 등)은 제외
@@ -215,6 +223,8 @@ function pickMySchedule_(events, myNos) {
       studentName: myNos[info.studentNo].name,
       instrument: info.instrument,
       roomName: ev.roomName,          // 실제로 일정이 있는 룸 캘린더의 이름
+      roomId: ev.roomId,
+      id: ev.id,
       start: ev.start,
       end: ev.end,
       part: info.type === '연습' ? info.part : ''
