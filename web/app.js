@@ -101,6 +101,33 @@ async function withBusy(btn, label, fn) {
   try { return await fn(); } finally { btn.disabled = false; btn.textContent = old; }
 }
 
+/** 내 정보를 바꾸고 휴대폰에 보관 */
+function setMe(me) {
+  S.me = me;
+  if (me && !me.mustChangePassword) Api.store.set('me', me);
+}
+
+/** 화면 모양에 영향을 주는 내 정보만 비교 (바뀌었으면 화면을 다시 그림) */
+function meShape(me) {
+  return me ? JSON.stringify([me.displayName, me.isAdmin, me.mustChangePassword, me.students, me.settings, me.dates]) : '';
+}
+
+/**
+ * [속도 개선 P2] 보관해 둔 내 정보로 먼저 화면을 띄운 뒤, 뒤에서 최신 내 정보를 받아 확인
+ * - 로그인이 풀렸으면 call() 이 로그인 화면으로 보냄
+ * - 회원 정보(휴원 전환 등)가 바뀌었으면 지금 화면을 다시 그림
+ */
+async function refreshMeInBackground() {
+  try {
+    const before = meShape(S.me);
+    const me = await call('getMe');
+    setMe(me);
+    if (meShape(me) !== before) render();
+  } catch (e) {
+    /* 통신 오류면 보관본으로 계속 사용 (각 화면의 요청이 따로 오류를 보여줌) */
+  }
+}
+
 /**
  * 서버 호출 (로그인 만료 등 공통 처리 포함)
  * 로그인이 풀렸으면 로그인 화면으로 보내고, 호출한 쪽에는 handled 표시가 된 오류를 던집니다.
@@ -191,7 +218,7 @@ function viewLogin() {
           loginId: $('#loginId').value, password: $('#pw').value, device: navigator.userAgent.slice(0, 120)
         });
         Api.setToken(r.token);
-        S.me = r.me;
+        setMe(r.me);
         go(r.me.mustChangePassword ? 'password' : 'home');
       } catch (e) {
         $('#err').textContent = e.message;
@@ -267,7 +294,7 @@ function viewChangePassword() {
     withBusy($('#f button'), '변경 중...', async function () {
       try {
         const r = await call('changePassword', { currentPassword: $('#cur').value, newPassword: n1 });
-        S.me = r.me;
+        setMe(r.me);
         toast('비밀번호를 변경했습니다.');
         go('home');
       } catch (e) {
@@ -339,13 +366,20 @@ async function viewHome(params, seq) {
   loadPostList(seq, HOME_POSTS);
   if (guest) return;
   // 다가오는 일정(연습실 예약 + 레슨) 중 가장 가까운 2건
+  const drawNext = function (r, isOld) {
+    const next = r.upcoming.slice(0, 2);
+    $('#next').innerHTML = '<div class="card' + (isOld ? ' stale' : '') + '">' +
+      (next.length ? next.map(function (b) { return bookingRowHtml(b, r.multipleStudents); }).join('')
+                   : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>' +
+      (isOld ? '<div class="updating">최신 일정 확인 중...</div>' : '');
+  };
+  const saved = Api.store.get('myBookings');
+  if (saved) drawNext(saved, true);   // 보관본 먼저
   try {
     const r = await call('getMyBookings');
     if (stale(seq)) return;
-    const next = r.upcoming.slice(0, 2);
-    $('#next').innerHTML = '<div class="card">' +
-      (next.length ? next.map(function (b) { return bookingRowHtml(b, r.multipleStudents); }).join('')
-                   : '<div class="sub">다가오는 일정이 없어요.</div>') + '</div>';
+    Api.store.set('myBookings', r);
+    drawNext(r, false);
     if (Api.perf) Perf.mark('홈 - 내 다음 일정 표시 완료');
   } catch (e) {
     if (!e.handled && !stale(seq)) $('#next').innerHTML = errorBox(e);
@@ -357,23 +391,31 @@ async function viewHome(params, seq) {
 // ---------------------------------------------------------------------
 const HOME_POSTS = 5;   // 홈에 보여줄 소식 수 (넘으면 '소식 전체 보기')
 
-/** 소식 목록을 #posts 칸에 그립니다. limit 이 있으면 그 수만큼만 */
+/** 소식 목록을 #posts 칸에 그립니다. limit 이 있으면 그 수만큼만 (보관본이 있으면 먼저 보여줌) */
 async function loadPostList(seq, limit) {
+  const saved = Api.store.get('posts');
+  if (saved) drawPostList(saved, limit, true);
   try {
     const list = await call('listPosts');
     if (stale(seq)) return;
-    const shown = limit ? list.slice(0, limit) : list;
+    Api.store.set('posts', list);
+    drawPostList(list, limit, false);
     if (Api.perf) Perf.mark('소식 목록 표시 완료');
-    $('#posts').innerHTML = '<div class="card">' +
+  } catch (e) {
+    if (!e.handled && !stale(seq)) $('#posts').innerHTML = errorBox(e);
+  }
+}
+
+function drawPostList(list, limit, isOld) {
+    const shown = limit ? list.slice(0, limit) : list;
+    $('#posts').innerHTML = '<div class="card' + (isOld ? ' stale' : '') + '">' +
       (shown.length ? shown.map(function (p) {
         return '<a class="item post-item" href="#post?id=' + encodeURIComponent(p.id) + '"><div>' +
           '<div class="main">' + (p.pinned ? '<span class="badge pin">고정</span>' : '') + esc(p.title) + '</div>' +
           '<div class="sub">' + esc(p.dateText) + '</div></div><span class="chev">›</span></a>';
       }).join('') : '<div class="sub">아직 소식이 없어요.</div>') + '</div>' +
-      (limit && list.length > limit ? '<a class="link" href="#posts">소식 전체 보기 (' + list.length + '건)</a>' : '');
-  } catch (e) {
-    if (!e.handled && !stale(seq)) $('#posts').innerHTML = errorBox(e);
-  }
+      (limit && list.length > limit ? '<a class="link" href="#posts">소식 전체 보기 (' + list.length + '건)</a>' : '') +
+      (isOld ? '<div class="updating">최신 소식 확인 중...</div>' : '');
 }
 
 function viewPosts(params, seq) {
@@ -416,6 +458,7 @@ async function viewPost(params, seq) {
         withBusy($('#del'), '삭제 중...', async function () {
           try {
             await call('adminDeletePost', { id: p.id });
+            Api.store.set('posts', null);
             toast('삭제했어요.');
             go('home');
           } catch (e) { if (!e.handled) toast(e.message); }
@@ -456,6 +499,7 @@ async function viewPostEdit(params, seq) {
     withBusy($('#f button'), '저장 중...', async function () {
       try {
         await call('adminSavePost', { id: id, title: $('#title').value, body: $('#body').value, pinned: $('#pinned').checked });
+        Api.store.set('posts', null);
         toast(id ? '수정했어요.' : '소식을 올렸어요.');
         go(id ? 'post?id=' + encodeURIComponent(id) : 'home');
       } catch (e) { if (!e.handled) $('#err').textContent = e.message; }
@@ -674,6 +718,7 @@ function viewBook(params, seq) {
         };
         if (edit) req.ref = edit.ref;
         const r = await call(edit ? 'modifyBooking' : 'createBooking', req);
+        Api.store.set('myBookings', null);
         if (stale(seq)) return;
         S.editing = null;
         showBookingDone(r);
@@ -733,6 +778,7 @@ function openBookingActions(b, showName, onDone) {
     await withBusy($('#mCancel', m), '취소 중...', async function () {
       try {
         await call('cancelBooking', { ref: b.ref });
+        Api.store.set('myBookings', null);
         closeModal();
         toast('예약을 취소했어요.');
         onDone();
@@ -1056,10 +1102,15 @@ async function boot() {
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('서비스워커 등록 실패', e); });
   }
-  if (Api.getToken()) {
+  const savedMe = Api.getToken() ? Api.store.get('me') : null;
+  if (savedMe) {
+    // [속도 개선 P2] 보관해 둔 내 정보로 바로 시작하고, 최신 내 정보는 화면 요청과 "동시에" 받음
+    S.me = savedMe;
+    setTimeout(refreshMeInBackground, 0);
+  } else if (Api.getToken()) {
     setView('<div class="loading">불러오는 중... ⏳</div>', { noNav: true });
     try {
-      S.me = await Api.call('getMe');
+      setMe(await Api.call('getMe'));
     } catch (e) {
       if (e.code === 'AUTH') {
         Api.setToken('');

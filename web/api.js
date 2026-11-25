@@ -27,7 +27,28 @@ const Api = (function () {
       if (token) localStorage.setItem(TOKEN_KEY, token);
       else localStorage.removeItem(TOKEN_KEY);
     } catch (e) { /* 저장소를 못 쓰는 환경(사생활 보호 모드 등)은 무시 */ }
+    store.clear();   // 로그인·로그아웃할 때마다 이전 사람의 보관 내용을 지움
   }
+
+  // [속도 개선 P2] 휴대폰 보관함: 마지막으로 받은 내 정보·소식·내 일정을 이 기기에 보관해 두었다가
+  // 앱을 열 때 먼저 보여주고, 서버에서 최신 내용을 받으면 바꿔 끼웁니다.
+  // (보관 내용은 이 기기에만 있고, 로그아웃하면 지워집니다)
+  const STORE_PREFIX = TOKEN_KEY + '_c_';
+  const store = {
+    get: function (key) {
+      try { const v = localStorage.getItem(STORE_PREFIX + key); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+    },
+    set: function (key, value) {
+      try { localStorage.setItem(STORE_PREFIX + key, JSON.stringify(value)); } catch (e) { /* 저장 공간 부족 등은 무시 */ }
+    },
+    clear: function () {
+      try {
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf(STORE_PREFIX) === 0 && k !== STORE_PREFIX + 'posts') localStorage.removeItem(k);   // 소식은 공개 정보라 유지
+        });
+      } catch (e) { /* 무시 */ }
+    }
+  };
 
   // [성능 측정] 주소 끝에 ?perf=1 을 붙이면 요청별 시간을 화면 아래에 표시 (진단용)
   const PERF = /[?&]perf=1/.test(location.search);
@@ -63,7 +84,7 @@ const Api = (function () {
     return json.data;
   }
 
-  return { call: call, getToken: getToken, setToken: setToken, perf: PERF };
+  return { call: call, getToken: getToken, setToken: setToken, perf: PERF, store: store };
 })();
 
 // ---------------------------------------------------------------------
