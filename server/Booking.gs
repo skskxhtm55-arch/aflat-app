@@ -135,12 +135,12 @@ function placeBooking_(ctx, data, oldRef) {
     return hhmm_(seg.start) + '~' + endText_(seg.end) + ' ' + seg.room.name;
   }).join(', ');
   const now = new Date();
-  segments.forEach(function (seg) {
-    appendRow_(SHEET.BOOKING_LOG, Object.assign({}, logBase, {
+  appendRows_(SHEET.BOOKING_LOG, segments.map(function (seg) {
+    return Object.assign({}, logBase, {
       '로그ID': newId_('B'), '룸': seg.room.name + (seg.part ? ' [' + seg.part + ']' : ''),
       '시작': hhmm_(seg.start), '종료': endText_(seg.end), '결과': isChange ? '변경' : '성공', '생성일시': now
-    }));
-  });
+    });
+  }));
 
   const dateText = koreanDateText_(dateKey);
   sendAlimtalk_(isChange ? 'H-8 연습실 예약 변경' : 'H-8 연습실 예약 확정', member.phone,
@@ -176,13 +176,13 @@ function apiCancelBooking_(ctx, data) {
   }
   const member = ctx.members.filter(function (m) { return m.studentNo === old.studentNo; })[0] || {};
   const now = new Date();
-  old.segments.forEach(function (s) {
-    appendRow_(SHEET.BOOKING_LOG, {
+  appendRows_(SHEET.BOOKING_LOG, old.segments.map(function (s) {
+    return {
       '로그ID': newId_('B'), '로그인ID': ctx.loginId, '회원ID': member.memberId || '', '수강생번호': old.studentNo,
       '악기': old.instrument, '룸': s.roomName + (s.part ? ' [' + s.part + ']' : ''), '날짜': old.dateKey,
       '시작': hhmm_(s.start), '종료': endText_(s.end), '결과': '취소', '생성일시': now, '비고': '수강생 앱에서 취소'
-    });
-  });
+    };
+  }));
   return { cancelled: true, text: old.text, studentName: member.name || '' };
 }
 
@@ -241,10 +241,6 @@ function loadOwnedBooking_(ctx, ref, st) {
     segments: segs
   };
 }
-
-/** 시각 표시 도우미 (자정 종료는 24:00) */
-function hhmm_(ms) { return fmt_(new Date(ms), 'HH:mm'); }
-function endText_(ms) { const t = hhmm_(ms); return t === '00:00' ? '24:00' : t; }
 
 /** 예약 거부: 예약로그에 실패로 남기고 화면에 사유를 보냅니다. */
 function rejectBooking_(logBase, reason) {

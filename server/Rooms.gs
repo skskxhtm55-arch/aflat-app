@@ -37,9 +37,81 @@ function getRooms_() {
 
 /**
  * 여러 룸 캘린더에서 기간 내 일정을 읽습니다.
- * 결과: { events: [{ roomId, roomName, start, end, title }], missing: [캘린더를 못 찾은 룸ID] }
+ * 결과: { events: [{ id, roomId, roomName, start, end, title }], missing: [캘린더를 못 찾은 룸ID] }
+ *
+ * [속도 개선 P3] 룸 캘린더 4개를 "동시에" 읽습니다 (구글 캘린더 API를 한 번에 4건 요청).
+ *   예전 방식은 캘린더를 하나씩 열고, 일정마다 제목·시각을 따로 꺼내 느렸습니다.
+ * 되돌리기: 스크립트 속성 CAL_READ_MODE = legacy 를 넣으면 예전 방식으로 읽습니다(코드 수정 없이).
+ * 두 방식이 같은 결과를 내는지는 시트 메뉴 '설치·테스트 도구 → 캘린더 읽기 비교'로 확인합니다.
  */
 function loadEventsInRange_(rooms, from, to) {
+  const mode = PropertiesService.getScriptProperties().getProperty('CAL_READ_MODE');
+  return String(mode || '').trim().toLowerCase() === 'legacy'
+    ? loadEventsInRangeLegacy_(rooms, from, to)
+    : loadEventsInRangeFast_(rooms, from, to);
+}
+
+/** 빠른 방식: 캘린더 API를 룸 수만큼 동시에 호출 */
+function loadEventsInRangeFast_(rooms, from, to) {
+  const events = [];
+  const missing = [];
+  if (!rooms.length) return { events: events, missing: missing };
+  const token = ScriptApp.getOAuthToken();
+  const query = '?singleEvents=true&maxResults=2500' +
+    '&timeMin=' + encodeURIComponent(from.toISOString()) +
+    '&timeMax=' + encodeURIComponent(to.toISOString()) +
+    '&fields=' + encodeURIComponent('nextPageToken,items(iCalUID,summary,start,end,status)');
+  const requests = rooms.map(function (room) {
+    return {
+      url: 'https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(room.calendarId) + '/events' + query,
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    };
+  });
+  const t = Date.now();
+  const responses = UrlFetchApp.fetchAll(requests);
+  perfAdd_('cal', t);
+
+  // 종일 일정('2026-11-26' 형태)은 그날 0시 기준 (서울 시간)
+  const toMs = function (when) {
+    if (!when) return NaN;
+    if (when.dateTime) return new Date(when.dateTime).getTime();
+    const d = dateFromKey_(when.date);
+    return d ? d.getTime() : NaN;
+  };
+
+  responses.forEach(function (res, i) {
+    const room = rooms[i];
+    const code = res.getResponseCode();
+    if (code === 404 || code === 403) {
+      console.error('캘린더를 찾을 수 없음(룸 ' + room.name + ', ' + code + '): ' + room.calendarId);
+      missing.push(room.id);
+      return;
+    }
+    if (code !== 200) {
+      // 일시 오류(429·500 등)에서 "비어 있다"고 잘못 판단하지 않도록 요청 자체를 실패시킴
+      throw new Error('캘린더 읽기 실패(룸 ' + room.name + ', ' + code + '): ' + res.getContentText().slice(0, 200));
+    }
+    const body = JSON.parse(res.getContentText());
+    if (body.nextPageToken) {
+      // 기간 안 일정이 2,500개를 넘는 경우(사실상 없음) — 이 룸만 예전 방식으로 다시 읽음
+      const one = loadEventsInRangeLegacy_([room], from, to);
+      Array.prototype.push.apply(events, one.events);
+      Array.prototype.push.apply(missing, one.missing);
+      return;
+    }
+    (body.items || []).forEach(function (it) {
+      if (it.status === 'cancelled') return;
+      const start = toMs(it.start), end = toMs(it.end);
+      if (isNaN(start) || isNaN(end)) return;
+      events.push({ id: it.iCalUID, roomId: room.id, roomName: room.name, start: start, end: end, title: it.summary || '' });
+    });
+  });
+  return { events: events, missing: missing };
+}
+
+/** 예전 방식: CalendarApp 으로 캘린더를 하나씩 읽기 (되돌리기·비교용) */
+function loadEventsInRangeLegacy_(rooms, from, to) {
   const events = [];
   const missing = [];
   rooms.forEach(function (room) {

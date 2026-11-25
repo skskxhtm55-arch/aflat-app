@@ -85,20 +85,39 @@ function readTable_(name) {
 
 /** 시트 맨 아래에 한 줄 추가. obj 의 키는 열 이름입니다. */
 function appendRow_(name, obj) {
+  return appendRows_(name, [obj]);
+}
+
+/**
+ * [속도 개선 P3] 시트 맨 아래에 여러 줄을 한 번에 추가.
+ * 글자로 저장할 열(휴대폰 번호 등)의 서식도 칸마다가 아니라 한 번에 지정합니다.
+ */
+function appendRows_(name, objs) {
+  if (!objs.length) return 0;
   const sh = sheet_(name);
   const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
   const row = sh.getLastRow() + 1;
+  const range = sh.getRange(row, 1, objs.length, headers.length);
   const textCols = TEXT_COLUMNS[name] || [];
-  headers.forEach(function (h, j) {
-    if (textCols.indexOf(h) >= 0) sh.getRange(row, j + 1).setNumberFormat('@');
-  });
-  const values = headers.map(function (h) {
-    const v = obj[h];
-    return v === undefined || v === null ? '' : v;
-  });
-  sh.getRange(row, 1, 1, headers.length).setValues([values]);
+  if (textCols.length) {
+    const formats = range.getNumberFormats();          // 기존 서식은 그대로 두고 글자 열만 '@'
+    formats.forEach(function (line) {
+      headers.forEach(function (h, j) { if (textCols.indexOf(h) >= 0) line[j] = '@'; });
+    });
+    range.setNumberFormats(formats);
+  }
+  range.setValues(objs.map(function (obj) {
+    return headers.map(function (h) {
+      const v = obj[h];
+      return v === undefined || v === null ? '' : v;
+    });
+  }));
   return row;
 }
+
+/** 시각 표시 도우미 (밀리초 → 'HH:mm', 자정 종료는 24:00) */
+function hhmm_(ms) { return fmt_(new Date(ms), 'HH:mm'); }
+function endText_(ms) { const t = hhmm_(ms); return t === '00:00' ? '24:00' : t; }
 
 /** readTable_ 로 읽은 한 줄의 일부 열만 고칩니다. changes = {열이름: 새값} */
 function updateRow_(table, rowObj, changes) {

@@ -511,6 +511,27 @@ async function viewPostEdit(params, seq) {
  * 예약할 수 없는 계정(휴원·원장 등)의 예약하기 탭: 이유를 안내하고 시간표만 보여줍니다.
  * (시간표 탭이 없어졌으므로 이 계정들도 여기서 연습실 현황을 볼 수 있어야 합니다)
  */
+// ---------------------------------------------------------------------
+// [속도 개선 P4] 시간표 불러오기 (예약 화면·예약 불가 계정용 현황이 함께 사용)
+// - 이미 본 날짜는 1분간 이 기기에서 기억해 바로 보여줍니다 (서버도 1분 기억하므로 같은 수준).
+// - 예약·변경·취소를 하면 기억을 모두 지웁니다. 예약 확정 검사는 항상 서버가 캘린더를 직접 확인합니다.
+// ---------------------------------------------------------------------
+const TT_KEEP_MS = 60000;
+const ttMemory = {};   // { 날짜: { at: 받은 시각, data: 시간표 } }
+
+async function fetchTimetable(date, fresh) {
+  const kept = ttMemory[date];
+  if (!fresh && kept && Date.now() - kept.at < TT_KEEP_MS) return kept.data;
+  const data = await call('getTimetable', { date: date });
+  ttMemory[date] = { at: Date.now(), data: data };
+  if (S.me) S.me.dates = data.dates;
+  return data;
+}
+
+function forgetTimetables() {
+  Object.keys(ttMemory).forEach(function (k) { delete ttMemory[k]; });
+}
+
 function viewTimetableOnly(params, seq, reasonsHtml) {
   const date = pickDate(params);
   setView(
@@ -524,9 +545,8 @@ function viewTimetableOnly(params, seq, reasonsHtml) {
     $$('#dates .chip').forEach(function (c) { c.classList.toggle('on', c.dataset.date === d); });
     $('#tt').innerHTML = '<div class="loading">시간표를 그리고 있어요... ⏳✨</div>';
     try {
-      const tt = await call('getTimetable', { date: d });
+      const tt = await fetchTimetable(d);
       if (stale(seq) || S.ttDate !== d) return;
-      S.me.dates = tt.dates;
       $('#tt').innerHTML = timetableHtml(tt, null, true);
     } catch (e) {
       if (!e.handled && !stale(seq)) $('#tt').innerHTML = errorBox(e);
@@ -577,29 +597,7 @@ function viewBook(params, seq) {
   let tt = null;   // 선택한 날짜의 시간표 + 내 사용량
   let submitErr = '';   // 서버가 예약을 거절한 사유. 선택을 바꾸기 전까지 계속 보여줌
 
-  setView(
-    (edit
-      ? '<div class="page-head"><h2>예약 변경</h2><p>새 조건으로 다시 배정해요. 실패하면 기존 예약은 그대로예요</p></div>' +
-        '<div class="msg info">변경 전: ' + esc(edit.dateText + ' ' + edit.timeText + ' ' + roomLabel(edit.roomText)) + '</div>'
-      : '<div class="page-head"><h2>연습실 예약</h2><p>룸은 자동으로 배정돼요</p></div>') +
-    '<form id="f" class="card">' +
-    (students.length > 1
-      ? '<div class="field"><span>수강생</span><div class="chips wrap" id="stuChips">' + students.map(function (s, i) {
-          return '<button type="button" class="chip' + (i === 0 ? ' on' : '') + '" data-i="' + i + '">' + esc(s.name) + '</button>';
-        }).join('') + '</div></div>'
-      : '<div class="field"><span>수강생</span>' + esc(students[0].name) + '</div>') +
-    '<label class="field"><span>악기</span><select class="input" id="inst"></select></label>' +
-    '<div class="field"><span>날짜</span>' + dateChipsHtml(S.me.dates, f.date) + '</div>' +
-    '<label class="field"><span>시작 시각</span><input class="input" id="start" type="time" step="60" required>' +
-    '<small>운영시간 ' + minToHHMM(st.openMin) + ' ~ ' + minToHHMM(st.closeMin) + ' · 분 단위로 입력할 수 있어요</small></label>' +
-    '<div class="field"><span>이용 시간</span><div class="chips wrap" id="durs"></div></div>' +
-    '<div class="msg info" id="usage"></div>' +
-    '<div class="msg info" id="summary"></div>' +
-    '<div class="msg err" id="err"></div>' +
-    '<button class="btn primary" id="submit" type="submit" disabled>' + (edit ? '이대로 변경하기' : '예약하기') + '</button>' +
-    '</form>' +
-    (edit ? '<a class="link" href="#my">변경하지 않고 돌아가기</a>' : '') +
-    '<h3 class="section-title">이 날의 연습실 현황</h3><div id="tt"></div>');
+  setView(bookFormHtml(students, f, st, edit));
   if (edit) $('#start').value = f.start;
 
   function fillInstruments() {
@@ -623,7 +621,6 @@ function viewBook(params, seq) {
   function refresh() {
     const startMin = hhmmToMin(f.start);
     const remaining = Math.max(0, st.maxDailyMin - usedMin());
-    const now = seoulNow();
 
     // 이용 시간 버튼: 남은 한도 초과 또는 운영 종료 시각을 넘으면 선택 불가
     $('#durs').innerHTML = st.durations.map(function (d) {
@@ -639,16 +636,7 @@ function viewBook(params, seq) {
       ? f.student.name + ' · ' + dateLabel(f.date) + ' 남은 예약 가능 시간: ' + remaining + '분 (하루 최대 ' + st.maxDailyMin + '분)'
       : '';
 
-    let err = '';
-    if (!isNaN(startMin)) {
-      // 오늘은 현재 시각에서 '지난시각허용분'(운영설정)만큼 이전 시각까지 예약 가능
-      const grace = st.pastGraceMin || 0;
-      if (f.date === now.date && startMin < now.min - grace) {
-        err = grace > 0 ? '현재 시각 ' + grace + '분 전까지만 예약할 수 있어요.' : '이미 지난 시각이에요.';
-      }
-      else if (startMin < st.openMin || startMin >= st.closeMin) err = '운영시간(' + minToHHMM(st.openMin) + '~' + minToHHMM(st.closeMin) + ') 안에서 선택해 주세요.';
-    }
-    if (tt && remaining < Math.min.apply(null, st.durations)) err = '이 날은 하루 예약 한도(' + st.maxDailyMin + '분)를 모두 사용했어요.';
+    const err = bookFormError(f.date, startMin, remaining, !!tt, st);
     $('#err').textContent = err || submitErr;
 
     const ready = f.instrument && !isNaN(startMin) && f.duration && !err && tt;
@@ -659,16 +647,15 @@ function viewBook(params, seq) {
     if (tt) $('#tt').innerHTML = timetableHtml(tt, ready ? { start: startMin, end: startMin + f.duration } : null, true);
   }
 
-  async function loadDay() {
+  async function loadDay(fresh) {
     tt = null;
     $('#tt').innerHTML = '<div class="loading">불러오는 중...</div>';
     refresh();
     const d = f.date;
     try {
-      const r = await call('getTimetable', { date: d });
+      const r = await fetchTimetable(d, fresh);
       if (stale(seq) || f.date !== d) return;
       tt = r;
-      S.me.dates = r.dates;
       refresh();
     } catch (e) {
       if (!e.handled && !stale(seq)) $('#tt').innerHTML = errorBox(e);
@@ -704,7 +691,11 @@ function viewBook(params, seq) {
     f.duration = Number(b.dataset.d); refresh();
   });
 
-  $('#f').addEventListener('submit', function (ev) {
+  $('#f').addEventListener('submit', submitBooking);
+  loadDay();
+
+  /** 예약하기(또는 변경하기) 버튼 */
+  function submitBooking(ev) {
     ev.preventDefault();
     const startMin = hhmmToMin(f.start);
     const text = f.student.name + ' · ' + f.instrument + '\n' + dateLabel(f.date) + ' ' + minToHHMM(startMin) + '~' +
@@ -719,6 +710,7 @@ function viewBook(params, seq) {
         if (edit) req.ref = edit.ref;
         const r = await call(edit ? 'modifyBooking' : 'createBooking', req);
         Api.store.set('myBookings', null);
+        forgetTimetables();
         if (stale(seq)) return;
         S.editing = null;
         showBookingDone(r);
@@ -727,12 +719,56 @@ function viewBook(params, seq) {
         // 시간표를 다시 불러오면 안내 칸이 새로 그려지므로, 사유를 따로 보관해 두고 계속 보여줍니다.
         submitErr = (edit ? '변경하지 못했어요(기존 예약은 그대로예요): ' : '예약하지 못했어요: ') + e.message;
         toast(submitErr);
-        loadDay();   // 그 사이 바뀐 현황 다시 보여주기
+        loadDay(true);   // 그 사이 바뀐 현황을 서버에서 새로 받아 보여주기
       }
     });
-  });
+  }
+}
 
-  loadDay();
+/** 예약 화면 모양(HTML) */
+function bookFormHtml(students, f, st, edit) {
+  return (edit
+      ? '<div class="page-head"><h2>예약 변경</h2><p>새 조건으로 다시 배정해요. 실패하면 기존 예약은 그대로예요</p></div>' +
+        '<div class="msg info">변경 전: ' + esc(edit.dateText + ' ' + edit.timeText + ' ' + roomLabel(edit.roomText)) + '</div>'
+      : '<div class="page-head"><h2>연습실 예약</h2><p>룸은 자동으로 배정돼요</p></div>') +
+    '<form id="f" class="card">' +
+    (students.length > 1
+      ? '<div class="field"><span>수강생</span><div class="chips wrap" id="stuChips">' + students.map(function (s, i) {
+          return '<button type="button" class="chip' + (i === 0 ? ' on' : '') + '" data-i="' + i + '">' + esc(s.name) + '</button>';
+        }).join('') + '</div></div>'
+      : '<div class="field"><span>수강생</span>' + esc(students[0].name) + '</div>') +
+    '<label class="field"><span>악기</span><select class="input" id="inst"></select></label>' +
+    '<div class="field"><span>날짜</span>' + dateChipsHtml(S.me.dates, f.date) + '</div>' +
+    '<label class="field"><span>시작 시각</span><input class="input" id="start" type="time" step="60" required>' +
+    '<small>운영시간 ' + minToHHMM(st.openMin) + ' ~ ' + minToHHMM(st.closeMin) + ' · 분 단위로 입력할 수 있어요</small></label>' +
+    '<div class="field"><span>이용 시간</span><div class="chips wrap" id="durs"></div></div>' +
+    '<div class="msg info" id="usage"></div>' +
+    '<div class="msg info" id="summary"></div>' +
+    '<div class="msg err" id="err"></div>' +
+    '<button class="btn primary" id="submit" type="submit" disabled>' + (edit ? '이대로 변경하기' : '예약하기') + '</button>' +
+    '</form>' +
+    (edit ? '<a class="link" href="#my">변경하지 않고 돌아가기</a>' : '') +
+    '<h3 class="section-title">이 날의 연습실 현황</h3><div id="tt"></div>';
+}
+
+/**
+ * 예약 화면에서 미리 막을 선택인지 검사 → 안내 문구 (문제없으면 '')
+ * (서버도 같은 규칙으로 다시 검사합니다)
+ */
+function bookFormError(date, startMin, remaining, ttLoaded, st) {
+  const now = seoulNow();
+  let err = '';
+  if (!isNaN(startMin)) {
+    // 오늘은 현재 시각에서 '지난시각허용분'(운영설정)만큼 이전 시각까지 예약 가능
+    const grace = st.pastGraceMin || 0;
+    if (date === now.date && startMin < now.min - grace) {
+      err = grace > 0 ? '현재 시각 ' + grace + '분 전까지만 예약할 수 있어요.' : '이미 지난 시각이에요.';
+    } else if (startMin < st.openMin || startMin >= st.closeMin) {
+      err = '운영시간(' + minToHHMM(st.openMin) + '~' + minToHHMM(st.closeMin) + ') 안에서 선택해 주세요.';
+    }
+  }
+  if (ttLoaded && remaining < Math.min.apply(null, st.durations)) err = '이 날은 하루 예약 한도(' + st.maxDailyMin + '분)를 모두 사용했어요.';
+  return err;
 }
 
 function showBookingDone(r) {
@@ -779,6 +815,7 @@ function openBookingActions(b, showName, onDone) {
       try {
         await call('cancelBooking', { ref: b.ref });
         Api.store.set('myBookings', null);
+        forgetTimetables();
         closeModal();
         toast('예약을 취소했어요.');
         onDone();

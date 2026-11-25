@@ -20,7 +20,8 @@ function onOpen() {
       .addItem('① 시트 구조 만들기/점검', 'menuSetupSheets')
       .addItem('② 테스트 환경 만들기 (테스트 전용)', 'menuSetupTestEnv')
       .addItem('비밀번호 해시 속도 측정', 'menuBenchmarkHash')
-      .addItem('기존 Key 시트에서 데이터 가져오기', 'menuImportLegacy'))
+      .addItem('기존 Key 시트에서 데이터 가져오기', 'menuImportLegacy')
+      .addItem('캘린더 읽기 비교 (빠른 방식 점검)', 'menuCompareCalendarRead'))
     .addToUi();
 }
 
@@ -152,4 +153,35 @@ function menuBenchmarkHash() {
 
 function menuImportLegacy() {
   runMenu_(importLegacy_);
+}
+
+
+/**
+ * [설치·테스트 도구] 캘린더 읽기 비교
+ * 빠른 방식(동시 읽기)과 예전 방식(하나씩 읽기)이 오늘부터 7일간 같은 일정을 읽는지 비교합니다.
+ * 다르면 스크립트 속성 CAL_READ_MODE = legacy 로 예전 방식으로 되돌리고 알려 주세요.
+ */
+function menuCompareCalendarRead() {
+  runMenu_(function () {
+    const rooms = getRooms_();
+    const from = dateFromKey_(todayKey_());
+    const to = dateFromKey_(addDaysKey_(todayKey_(), 7));
+    let t = Date.now();
+    const a = loadEventsInRangeFast_(rooms, from, to);
+    const fastMs = Date.now() - t;
+    t = Date.now();
+    const b = loadEventsInRangeLegacy_(rooms, from, to);
+    const legacyMs = Date.now() - t;
+    const key = function (e) { return [e.roomId, e.start, e.end, e.title, e.id].join('|'); };
+    const ka = a.events.map(key).sort(), kb = b.events.map(key).sort();
+    const onlyA = ka.filter(function (k) { return kb.indexOf(k) < 0; });
+    const onlyB = kb.filter(function (k) { return ka.indexOf(k) < 0; });
+    const same = !onlyA.length && !onlyB.length && a.missing.join() === b.missing.join();
+    alert_('캘린더 읽기 비교 (오늘부터 7일, 룸 ' + rooms.length + '개)\n\n' +
+      '빠른 방식: 일정 ' + a.events.length + '건, ' + fastMs + 'ms\n' +
+      '예전 방식: 일정 ' + b.events.length + '건, ' + legacyMs + 'ms\n\n' +
+      (same ? '✅ 결과가 같습니다.'
+            : '⚠ 결과가 다릅니다. 스크립트 속성 CAL_READ_MODE = legacy 를 넣고 알려 주세요.\n' +
+              '빠른 방식에만: ' + onlyA.slice(0, 3).join(' / ') + '\n예전 방식에만: ' + onlyB.slice(0, 3).join(' / ')));
+  });
 }

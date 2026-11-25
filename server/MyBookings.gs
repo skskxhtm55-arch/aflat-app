@@ -26,8 +26,8 @@ function apiGetMyBookings_(ctx) {
 
   const now = Date.now();
   const days = ['일', '월', '화', '수', '목', '금', '토'];
-  const hhmm = function (ms) { return fmt_(new Date(ms), 'HH:mm'); };
-  const endText = function (ms) { const t = hhmm(ms); return t === '00:00' ? '24:00' : t; };
+  const hhmm = hhmm_;
+  const endText = endText_;
 
   const list = groupSplitBookings_(items).map(function (b) {
     const d = new Date(b.start);
